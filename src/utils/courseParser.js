@@ -36,7 +36,9 @@ export const parsePlatziUrl = async (url) => {
     
     const sessionCookie = useAuthStore.getState().cookie;
     
-    const headers = {};
+    const headers = {
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+    };
     if (sessionCookie) {
       headers['x-platzi-cookie'] = sessionCookie;
     }

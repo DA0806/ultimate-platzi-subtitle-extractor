@@ -26,7 +26,7 @@ export const useSubtitleStore = create((set, get) => ({
     const total = selectedVideos.length;
     if (total === 0) return { progress: 0, isExtracting: false };
     
-    const completed = selectedVideos.filter(v => v.status === 'ready' || v.status === 'error').length;
+    const completed = selectedVideos.filter(v => v.status === 'ready' || v.status === 'error' || v.status === 'no-video').length;
     const progress = Math.round((completed / total) * 100);
     return { progress, isExtracting: progress < 100 };
   }),

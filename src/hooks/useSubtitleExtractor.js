@@ -13,16 +13,21 @@ const inferLangFromUrl = (url) => {
 };
 
 const extractVttUrls = (html) => {
-  // Buscamos cualquier URL que termine en .vtt, ignorando comillas, espacios y llaves JSON.
-  const rawMatches = html.match(/https?:[^\s"'{}><]+\.vtt/g) || [];
+  // Buscamos URLs completas o hashes de archivos VTT (ej: 6eec75eb...-en.vtt)
+  const rawMatches = html.match(/(?:https?:[^\s"'{}><\\]+|[a-zA-Z0-9_-]+)\.vtt/ig) || [];
   
-  // Limpiamos las URLs escapadas de JSON (ej: https:\/\/... o variables unicode \u0026)
-  const cleanedUrls = rawMatches.map(url => 
-    url
+  const cleanedUrls = rawMatches.map(url => {
+    let clean = url
       .replace(/\\\//g, '/')
       .replace(/\\u0026/g, '&')
-      .replace(/\\u003d/g, '=')
-  );
+      .replace(/\\u003d/g, '=');
+    
+    // Si no empieza con http, es un hash. Asumimos la ruta de Platzi.
+    if (!clean.startsWith('http')) {
+      clean = `https://static.platzi.com/media/subtitle/${clean}`;
+    }
+    return clean;
+  });
   
   return Array.from(new Set(cleanedUrls));
 };
@@ -64,8 +69,11 @@ export const useSubtitleExtractor = () => {
         
         try {
           // 1. Obtener el HTML de la página de la clase a través del proxy para no tener CORS
-          const proxyUrl = `/api/platzi/cursos/${courseInfo.courseSlug}/${video.slug}/`;
-          const headers = {};
+          const parsedUrl = new URL(video.url);
+          const proxyUrl = `/api/platzi${parsedUrl.pathname}`;
+          const headers = {
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+          };
           if (sessionCookie) {
             headers['x-platzi-cookie'] = sessionCookie;
           }
