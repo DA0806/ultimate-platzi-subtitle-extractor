@@ -151,7 +151,13 @@ export const parsePlatziUrl = async (url) => {
   } catch (err) {
     console.error(err);
     if (err.response) {
-       if (err.response.status === 404) throw new Error('Curso no encontrado (Error 404). Verifica la URL.');
+       const sessionCookie = useAuthStore.getState().cookie;
+       if (err.response.status === 404) {
+         if (!sessionCookie) {
+           throw new Error('Curso no accesible (Error 404). Este curso probablemente requiere autenticación. Configura tu cookie de sesión primero.');
+         }
+         throw new Error('Curso no encontrado (Error 404). Verifica la URL o que tu cookie de sesión no haya expirado.');
+       }
        if (err.response.status === 403) throw new Error('Acceso denegado (Error 403). Verifica tus cookies o protección anti-bot.');
        throw new Error(`Error ${err.response.status}: Revisa tus cookies de sesión.`);
     }
