@@ -4,36 +4,69 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: 'class',
+  darkMode: ['class'],
   theme: {
     extend: {
       colors: {
-        platzi: {
-          green: '#98EC2D',
-          'green-hover': '#7dcf1f',
+        background: 'hsl(var(--background) / <alpha-value>)',
+        foreground: 'hsl(var(--foreground) / <alpha-value>)',
+        card: {
+          DEFAULT: 'hsl(var(--card) / <alpha-value>)',
+          foreground: 'hsl(var(--card-foreground) / <alpha-value>)',
         },
-        dark: {
-          900: '#0f0f0f',
-          800: '#1a1a1a',
-          700: '#222222',
-          600: '#2e2e2e',
-          500: '#3d3d3d',
-        }
+        popover: {
+          DEFAULT: 'hsl(var(--popover) / <alpha-value>)',
+          foreground: 'hsl(var(--popover-foreground) / <alpha-value>)',
+        },
+        primary: {
+          DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
+          foreground: 'hsl(var(--primary-foreground) / <alpha-value>)',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary) / <alpha-value>)',
+          foreground: 'hsl(var(--secondary-foreground) / <alpha-value>)',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted) / <alpha-value>)',
+          foreground: 'hsl(var(--muted-foreground) / <alpha-value>)',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent) / <alpha-value>)',
+          foreground: 'hsl(var(--accent-foreground) / <alpha-value>)',
+        },
+        success: 'hsl(var(--success) / <alpha-value>)',
+        warning: 'hsl(var(--warning) / <alpha-value>)',
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive) / <alpha-value>)',
+          foreground: 'hsl(var(--destructive-foreground) / <alpha-value>)',
+        },
+        border: 'hsl(var(--border) / <alpha-value>)',
+        input: 'hsl(var(--input) / <alpha-value>)',
+        ring: 'hsl(var(--ring) / <alpha-value>)',
+      },
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'var(--radius-sm)',
+        sm: 'calc(var(--radius-sm) - 2px)',
+        full: 'var(--radius-pill)',
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        sans: ['IBM Plex Sans', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       animation: {
-        'fade-in': 'fadeIn 200ms ease',
-        'slide-up': 'slideUp 200ms ease',
+        'fade-in': 'fadeIn 200ms ease-out',
+        'slide-up': 'slideUp 200ms ease-out',
         'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
       keyframes: {
         fadeIn: { from: { opacity: 0 }, to: { opacity: 1 } },
-        slideUp: { from: { opacity: 0, transform: 'translateY(8px)' }, 
-                   to:   { opacity: 1, transform: 'translateY(0)' } },
-      }
-    }
+        slideUp: {
+          from: { opacity: 0, transform: 'translateY(8px)' },
+          to: { opacity: 1, transform: 'translateY(0)' },
+        },
+      },
+    },
   },
   plugins: [],
 }
