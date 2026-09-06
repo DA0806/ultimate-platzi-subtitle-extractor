@@ -3,8 +3,10 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { useI18n } from '../i18n';
 
+const TUTORIAL_VIDEO_URL = 'https://res.cloudinary.com/x7yrsxgf/video/upload/v1788657850/tutorial_upse_v2.mp4';
+
 export const CookieTutorial = ({ onBack, isSetupContext = false }) => {
-  const tutorialVideoUrl = import.meta.env.VITE_COOKIE_TUTORIAL_URL;
+  const tutorialVideoUrl = import.meta.env.VITE_COOKIE_TUTORIAL_URL || TUTORIAL_VIDEO_URL;
   const { t } = useI18n();
   const steps = [
     { title: t('tutorial.openPlatzi'), description: t('tutorial.openPlatziDescription') },
