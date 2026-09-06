@@ -51,6 +51,12 @@
   --card-padding: 1.25rem;
   --panel-shadow: 0 18px 50px hsl(var(--black) / 0.18);
   --focus-shadow: 0 0 0 3px hsl(var(--ring) / 0.24);
+
+  --motion-duration-micro: 180ms;
+  --motion-duration-reveal: 360ms;
+  --motion-duration-state: 240ms;
+  --motion-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
@@ -111,6 +117,8 @@
 
   html {
     font-size: 16px;
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
   }
 
   body {
@@ -169,6 +177,7 @@
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }

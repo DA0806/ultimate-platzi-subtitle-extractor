@@ -1,149 +1,129 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, BookOpen, CheckCircle, Cookie, LogOut, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useAuthStore } from '../store/authStore';
-import { X, LogOut, Cookie, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
+import { useI18n } from '../i18n';
 
-export const AuthPanel = ({ isOpen, onClose }) => {
+export const AuthPanel = ({ isOpen, onClose, onOpenTutorial, triggerRef, embedded = false }) => {
   const { loginWithCookie, logout } = useAuth();
-  const user = useAuthStore(state => state.user);
   const cookie = useAuthStore(state => state.cookie);
-  
+  const panelRef = useRef(null);
   const [cookieStr, setCookieStr] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const { t } = useI18n();
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const trigger = triggerRef?.current;
+    const frame = window.requestAnimationFrame(() => panelRef.current?.focus({ preventScroll: true }));
+    const handleKeyDown = event => {
+      if (event.key === 'Escape') onClose();
+    };
+    if (!embedded) document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (!embedded) document.removeEventListener('keydown', handleKeyDown);
+      if (!embedded) trigger?.focus({ preventScroll: true });
+    };
+  }, [embedded, isOpen, onClose, triggerRef]);
 
   if (!isOpen) return null;
 
-  const handleCookieLogin = (e) => {
-    e.preventDefault();
-    const trimmed = cookieStr.trim();
-    if (!trimmed) return;
+  const isMockCookie = Boolean(cookie?.includes('mock_session_cookie'));
+  const hasStoredCookie = Boolean(cookie?.trim() && !isMockCookie);
 
-    loginWithCookie(trimmed);
+  const handleCookieLogin = event => {
+    event.preventDefault();
+    const value = cookieStr.trim();
+    if (!value) return;
+    loginWithCookie(value);
+    setIsEditing(false);
     setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    window.setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  const isMockCookie = cookie && cookie.includes('mock_session_cookie');
-  const hasValidCookie = cookie && !isMockCookie && cookie.length > 20;
+  const openTutorial = () => {
+    onClose?.();
+    onOpenTutorial?.();
+  };
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} />
-      
-      <div className="fixed right-0 top-0 h-full w-96 bg-dark-800 border-l border-dark-600 shadow-2xl z-50 animate-slide-up p-6 flex flex-col gap-6 overflow-y-auto">
-        <div className="flex justify-between items-center">
-          <h2 className="text-neutral-100 font-semibold text-lg">🔐 Sesión Platzi</h2>
-          <button onClick={onClose} className="p-2 hover:bg-dark-700 rounded-full transition-colors text-neutral-400 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
+    <div
+      className={embedded ? 'w-full' : 'fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/55 p-0 backdrop-blur-[2px] animate-fade-in sm:items-center sm:p-6'}
+      onClick={event => !embedded && event.target === event.currentTarget && onClose()}
+    >
+      <section
+        id="auth-panel"
+        ref={panelRef}
+        role={embedded ? undefined : 'dialog'}
+        aria-modal={embedded ? undefined : true}
+        aria-labelledby="auth-panel-title"
+        tabIndex={embedded ? undefined : -1}
+        className={embedded ? 'w-full rounded-lg border border-border bg-card p-5 shadow-[var(--panel-shadow)] animate-slide-up sm:p-6' : 'max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-border bg-background p-5 shadow-[var(--panel-shadow)] animate-state-change focus:outline-none sm:rounded-2xl sm:p-6'}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{t('auth.sessionEyebrow')}</p>
+            <h2 id="auth-panel-title" className="mt-1 text-xl font-semibold text-foreground">{t('auth.sessionTitle')}</h2>
+          </div>
+          {!embedded && (
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={t('auth.closeDialog')}>
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          )}
         </div>
 
-        {hasValidCookie ? (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4 p-4 bg-dark-700 rounded-xl border border-platzi-green/30">
-              <div className="w-10 h-10 rounded-full bg-platzi-green/20 flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-platzi-green" />
+        <div className="mt-6">
+          {hasStoredCookie && !isEditing ? (
+            <div className="flex flex-col gap-4 rounded-lg border border-border bg-secondary/50 p-4">
+              <div className="flex items-center gap-3">
+                <Cookie className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-medium text-card-foreground">{t('auth.savedCookie')}</h3>
+                    <Badge variant="muted">{t('auth.unverified')}</Badge>
+                  </div>
+                  <p className="text-sm leading-5 text-muted-foreground">{t('auth.savedCookieDescription')}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-white font-medium">Sesión activa</h3>
-                <p className="text-neutral-400 text-sm">Cookie configurada ✓</p>
+              <code className="block truncate rounded-md bg-background px-3 py-2 font-mono text-xs text-card-foreground" title={t('auth.savedCookieTitle')}>
+                {cookie?.substring(0, 12)}••••••••••••
+              </code>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => { setCookieStr(cookie || ''); setIsEditing(true); }}>
+                  {t('auth.editCookie')}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => { logout(); setCookieStr(''); setIsEditing(false); }}>
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                  {t('auth.disconnect')}
+                </Button>
               </div>
             </div>
-            
-            <div className="bg-dark-700 rounded-xl p-3 border border-dark-600">
-              <p className="text-xs text-neutral-500 mb-1">Cookie actual:</p>
-              <p className="text-xs text-neutral-300 font-mono break-all line-clamp-3">{cookie?.substring(0, 120)}...</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {isMockCookie && <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>{t('auth.invalidCookie')}</p></div>}
+              <div className="flex items-start gap-3 rounded-md border border-border bg-secondary/50 px-3 py-3"><Cookie className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" /><div><p className="text-sm font-medium text-card-foreground">{t('auth.notConfigured')}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{t('auth.pasteCookieDescription')}</p></div></div>
+              <form onSubmit={handleCookieLogin} className="flex flex-col gap-2">
+                <label htmlFor="platzi-cookie" className="text-xs font-medium text-card-foreground">{t('auth.cookieLabel')}</label>
+                <textarea id="platzi-cookie" value={cookieStr} onChange={event => setCookieStr(event.target.value)} className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder={t('auth.cookiePlaceholder')} rows="3" required />
+                <Button type="submit" className="self-start sm:self-end">{t('auth.saveCookie')}</Button>
+              </form>
+              {showSuccess && <div role="status" className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success animate-state-change"><CheckCircle className="h-4 w-4" aria-hidden="true" />{t('auth.cookieSaved')}</div>}
+              <div className="flex items-start gap-3 rounded-md border border-warning/20 bg-warning/5 px-3 py-2 text-xs leading-5 text-muted-foreground"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" /><p>{t('auth.freeOnly')}</p></div>
             </div>
-            
-            <button 
-              onClick={() => { logout(); setCookieStr(''); }}
-              className="flex items-center justify-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 py-2 rounded-lg transition-colors text-sm font-medium"
-            >
-              <LogOut className="w-4 h-4" />
-              Cerrar sesión / Cambiar cookie
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-5">
-            {isMockCookie && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-xs flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <p>Tienes una cookie inválida configurada. Sigue las instrucciones para obtener tu cookie real.</p>
-              </div>
-            )}
+          )}
+        </div>
 
-            <div className="bg-dark-900 rounded-xl p-4 border border-dark-600">
-              <div className="flex items-center gap-2 mb-3">
-                <Cookie className="w-5 h-5 text-platzi-green" />
-                <h3 className="text-white font-medium text-sm">Cómo obtener tu cookie</h3>
-              </div>
-
-              <ol className="text-xs text-neutral-400 space-y-3">
-                <li className="flex gap-2">
-                  <span className="text-platzi-green font-bold shrink-0">1.</span>
-                  <span>Abre <a href="https://platzi.com" target="_blank" rel="noreferrer" className="text-platzi-green underline">platzi.com</a> en tu navegador (logueado).</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-platzi-green font-bold shrink-0">2.</span>
-                  <span>Presiona <kbd className="bg-dark-600 px-1.5 py-0.5 rounded text-neutral-200 font-mono text-[10px]">F12</kbd> para abrir DevTools.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-platzi-green font-bold shrink-0">3.</span>
-                  <span>Ve a la pestaña <strong className="text-neutral-200">Network</strong> (Red).</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-platzi-green font-bold shrink-0">4.</span>
-                  <span>Recarga la página (<kbd className="bg-dark-600 px-1.5 py-0.5 rounded text-neutral-200 font-mono text-[10px]">F5</kbd>).</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-platzi-green font-bold shrink-0">5.</span>
-                  <span>En la lista de peticiones, haz clic en la <strong className="text-neutral-200">primera</strong> (el documento HTML, suele ser el nombre de la página).</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-platzi-green font-bold shrink-0">6.</span>
-                  <span>En el panel derecho, busca la sección <strong className="text-neutral-200">Request Headers</strong>.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-platzi-green font-bold shrink-0">7.</span>
-                  <span>Busca el header <code className="bg-dark-600 px-1 rounded text-platzi-green">Cookie:</code> y copia <strong className="text-neutral-200">todo su valor</strong> (clic derecho → Copy value).</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-platzi-green font-bold shrink-0">8.</span>
-                  <span>Pégalo aquí abajo.</span>
-                </li>
-              </ol>
-            </div>
-            
-            <form onSubmit={handleCookieLogin} className="flex flex-col gap-3">
-              <textarea 
-                value={cookieStr}
-                onChange={e => setCookieStr(e.target.value)}
-                className="bg-dark-700 border border-dark-600 rounded-xl px-3 py-2.5 w-full text-neutral-100 text-xs h-28 focus:outline-none focus:ring-2 focus:ring-platzi-green/50 focus:border-platzi-green transition-all resize-none font-mono"
-                placeholder="Pega aquí tu cookie completa del header Cookie de Network..."
-                required
-              />
-              <button 
-                type="submit"
-                className="bg-platzi-green hover:bg-platzi-green-hover text-black font-semibold rounded-xl px-4 py-2.5 transition-colors duration-200"
-              >
-                Guardar cookie
-              </button>
-            </form>
-
-            {showSuccess && (
-              <div className="bg-platzi-green/10 border border-platzi-green/30 rounded-xl px-4 py-3 text-platzi-green text-sm flex items-center gap-2 animate-fade-in">
-                <CheckCircle className="w-4 h-4" />
-                Cookie guardada correctamente
-              </div>
-            )}
-            
-            <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-3 text-yellow-400/80 text-xs flex items-start gap-2 mt-auto">
-              <span className="text-lg leading-none">⚠️</span>
-              <p>Sin sesión activa, solo podrás extraer subtítulos de clases gratuitas. Los cursos de pago requieren tu cookie de sesión.</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+        <div className="mt-5 border-t border-border pt-5">
+          <Button type="button" variant="outline" className="w-full justify-start" onClick={openTutorial}>
+            <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
+            {t('auth.getCookie')}
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 };

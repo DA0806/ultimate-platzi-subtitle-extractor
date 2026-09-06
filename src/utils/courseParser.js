@@ -19,6 +19,9 @@ const normalizePlatziPath = (href) => {
   }
 };
 
+export const normalizeClassTitle = (title) =>
+  String(title || '').trim().replace(/^(\d{1,3})(?=\p{L})/u, '$1. ');
+
 export const parsePlatziUrl = async (url) => {
   try {
     const parsedUrl = new URL(url);
@@ -87,9 +90,9 @@ export const parsePlatziUrl = async (url) => {
       let classTitle = `Clase ${uniqueLinks.size + 1}`;
         const h3 = a.querySelector('h3');
         if (h3 && h3.textContent) {
-          classTitle = h3.textContent.trim();
+          classTitle = normalizeClassTitle(h3.textContent);
         } else if (a.textContent) {
-          classTitle = a.textContent.trim();
+          classTitle = normalizeClassTitle(a.textContent);
           // Limpiar si capturó la duración dentro del texto del <a>
           classTitle = classTitle.replace(/\d{2}:\d{2}\s*min/g, '').trim();
         }

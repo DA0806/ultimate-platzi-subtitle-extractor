@@ -1,30 +1,39 @@
-import { Download, Archive, Copy, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { Archive, CheckCircle2, Copy, Download } from 'lucide-react';
 import { useSubtitleStore } from '../store/subtitleStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { downloadMergedTxt, downloadZip } from '../utils/downloader';
 import { mergeSubtitles } from '../utils/textMerger';
-import { useState } from 'react';
+import { Button } from './ui/Button';
+import { Progress } from './ui/Progress';
+import { useI18n } from '../i18n';
 
 export const ExportPanel = () => {
-  const { videos, isExtracting, courseInfo } = useSubtitleStore();
+  const { videos, isExtracting, extractionNotice, progress, courseInfo } = useSubtitleStore();
   const preferredLang = useSettingsStore(state => state.preferredLang);
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   const exportableVideos = videos.filter(
-    (v) => v.selected && (
-      (v.status === 'ready' && v.extractedContent && Object.keys(v.extractedContent).length > 0) ||
-      (v.status === 'no-video')
-    )
+    video =>
+      video.selected &&
+      ((video.status === 'ready' &&
+        video.extractedContent &&
+        Object.keys(video.extractedContent).length > 0) ||
+        video.status === 'no-video')
   );
+  const selectedVideos = videos.filter(video => video.selected);
+  const processedVideos = selectedVideos.filter(video => (
+    ['ready', 'error', 'no-video'].includes(video.status)
+  )).length;
 
-  // Solo mostrar el panel si hay videos y no se está extrayendo (o al menos un video ya está listo)
-  if (videos.length === 0 || exportableVideos.length === 0 || isExtracting) return null;
+  if (videos.length === 0 || exportableVideos.length === 0 || isExtracting || extractionNotice) return null;
 
   const handleCopy = () => {
     const text = mergeSubtitles(exportableVideos, preferredLang === 'all' ? 'es' : preferredLang);
     navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownloadTxt = () => {
@@ -36,40 +45,60 @@ export const ExportPanel = () => {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-dark-800/90 backdrop-blur-md border-t border-neutral-200 dark:border-dark-600 p-4 animate-slide-up shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)]">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-        
-        <div className="text-sm font-medium text-neutral-600 dark:text-neutral-300">
-          Extracción completada. ¿Cómo deseas exportar?
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6">
+      <section
+        className="pointer-events-auto mx-auto max-w-6xl animate-result-reveal overflow-hidden rounded-xl border border-primary/25 bg-card/95 shadow-[0_-18px_50px_-30px_hsl(var(--black)/0.8)] backdrop-blur-xl"
+        aria-label={t('export.label')}
+      >
+        <div className="border-b border-border/80 p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-success/10 text-success">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-card-foreground" role="status" aria-live="polite">
+                  {t('export.completed')}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t('export.processed', { processed: processedVideos, total: selectedVideos.length })}
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 font-mono text-sm font-semibold text-success">
+              {Math.round(progress)}%
+            </span>
+          </div>
+          <Progress
+            value={progress}
+            aria-label={t('progress.completedLabel')}
+            className="mt-4 h-2.5 bg-muted/80"
+          />
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button 
-            onClick={handleCopy}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 dark:bg-dark-700 dark:hover:bg-dark-600 text-neutral-700 dark:text-neutral-200 text-sm font-medium transition-colors"
-          >
-            {copied ? <CheckCircle2 className="w-4 h-4 text-platzi-green" /> : <Copy className="w-4 h-4" />}
-            {copied ? 'Copiado' : 'Copiar TXT'}
-          </button>
-          
-          <button 
-            onClick={handleDownloadTxt}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 dark:bg-dark-700 dark:hover:bg-dark-600 text-neutral-700 dark:text-neutral-200 text-sm font-medium transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Descargar TXT
-          </button>
+        <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+          <p className="text-sm font-medium text-foreground">{t('export.how')}</p>
 
-          <button 
-            onClick={handleDownloadZip}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-platzi-green hover:bg-platzi-green-hover text-black text-sm font-semibold transition-colors"
-          >
-            <Archive className="w-4 h-4" />
-            Descargar ZIP
-          </button>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <Button type="button" variant="secondary" onClick={handleCopy} className="min-w-0 flex-1 sm:flex-none">
+              {copied ? (
+                <CheckCircle2 key="copied" className="h-4 w-4 animate-state-change text-success" aria-hidden="true" />
+              ) : (
+                <Copy key="copy" className="h-4 w-4 animate-state-change" aria-hidden="true" />
+              )}
+              {copied ? t('export.copied') : t('export.copy')}
+            </Button>
+            <Button type="button" variant="secondary" onClick={handleDownloadTxt} className="min-w-0 flex-1 sm:flex-none">
+              <Download className="h-4 w-4" aria-hidden="true" />
+              {t('export.downloadTxt')}
+            </Button>
+            <Button type="button" onClick={handleDownloadZip} className="min-w-0 flex-1 sm:flex-none">
+              <Archive className="h-4 w-4" aria-hidden="true" />
+              {t('export.downloadZip')}
+            </Button>
+          </div>
         </div>
-
-      </div>
+      </section>
     </div>
   );
 };

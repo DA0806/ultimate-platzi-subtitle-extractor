@@ -6,7 +6,7 @@ export const useAuthStore = create(
     (set) => ({
       token: null,
       cookie: null,
-      user: null, // { email, name, avatar, plan }
+      user: null, // Optional identity returned by a real authentication provider
       
       login: (token, cookie, user) => set({ token, cookie, user }),
       

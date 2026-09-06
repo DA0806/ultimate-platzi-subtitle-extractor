@@ -9,7 +9,7 @@ const variants = {
 export const Badge = ({ variant = 'default', className = '', children, ...spanProps }) => (
   <span
     {...spanProps}
-    className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${variants[variant] || variants.default} ${className}`}
+    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-state ease-motion ${variants[variant] || variants.default} ${className}`}
   >
     {children}
   </span>

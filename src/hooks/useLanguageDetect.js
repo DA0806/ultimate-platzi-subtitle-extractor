@@ -10,21 +10,21 @@ export const useLanguageDetect = () => {
   const detectLangs = async () => {
     // Leer el estado actualizado directamente del store para evitar el problema de stale closure
     const { courseInfo, videos } = useSubtitleStore.getState();
-    
+
     if (!courseInfo || videos.length === 0) return;
-    
+
     setIsDetecting(true);
-    
+
     try {
       const firstVideo = videos[0];
       const langs = await detectAvailableLanguages(firstVideo.url);
-      
+
       setDetectedLangs(langs);
-      
+
       videos.forEach(v => {
         updateVideo(v.id, { availableLangs: langs });
       });
-      
+
     } catch (err) {
       console.error("Error detecting languages", err);
       setDetectedLangs(['es']);

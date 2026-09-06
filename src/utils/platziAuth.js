@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 // Since we cannot test actual Platzi login easily without credentials and avoiding CAPTCHAs,
 // this is a mock representation of how it would work if we had the exact current API details.
 // For the sake of the MVP, if the user logs in with credentials, we simulate a success.
@@ -23,15 +21,7 @@ export const loginWithCredentials = async (email, password) => {
     user: {
       email,
       name: email.split('@')[0],
-      avatar: `https://ui-avatars.com/api/?name=${email.split('@')[0]}&background=98EC2D&color=0f0f0f`,
-      plan: 'Expert+'
+      avatar: `https://ui-avatars.com/api/?name=${email.split('@')[0]}&background=98EC2D&color=0f0f0f`
     }
   };
-};
-
-export const validateSession = async (cookie) => {
-  if (!cookie) return false;
-  // Simulate validation
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return true;
 };

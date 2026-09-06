@@ -1,21 +1,15 @@
+import { Globe, Languages } from 'lucide-react';
 import { useSubtitleStore } from '../store/subtitleStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { Globe } from 'lucide-react';
+import { Button } from './ui/Button';
+import { useI18n } from '../i18n';
 
-const FLAGS = {
-  es: '🇪🇸',
-  en: '🇺🇸',
-  pt: '🇧🇷',
-  de: '🇩🇪',
-  fr: '🇫🇷'
-};
-
-const NAMES = {
-  es: 'Español',
-  en: 'English',
-  pt: 'Português',
-  de: 'Deutsch',
-  fr: 'Français'
+const LANGUAGE_NAME_KEYS = {
+  es: 'subtitles.name.es',
+  en: 'subtitles.name.en',
+  pt: 'subtitles.name.pt',
+  de: 'subtitles.name.de',
+  fr: 'subtitles.name.fr',
 };
 
 export const LanguageSelector = () => {
@@ -23,44 +17,49 @@ export const LanguageSelector = () => {
   const isExtracting = useSubtitleStore(state => state.isExtracting);
   const preferredLang = useSettingsStore(state => state.preferredLang);
   const setPreferredLang = useSettingsStore(state => state.setPreferredLang);
+  const { t } = useI18n();
 
   if (!detectedLangs || detectedLangs.length === 0) return null;
 
   return (
-    <div className="mt-4 animate-fade-in">
-      <label className="text-neutral-500 text-xs uppercase tracking-wider mb-2 block">
-        Idiomas disponibles
-      </label>
-      <div className="flex flex-wrap gap-2">
-        {detectedLangs.map(lang => (
-          <button
+    <fieldset className="mt-5 animate-fade-in">
+      <legend className="flex items-center gap-2 text-sm font-medium text-card-foreground">
+        <Languages className="h-4 w-4 text-primary" aria-hidden="true" />
+        {t('subtitles.label')}
+      </legend>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('subtitles.help')}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {detectedLangs.map((lang, index) => (
+          <Button
             key={lang}
+            type="button"
+            size="sm"
+            variant={preferredLang === lang ? 'default' : 'outline'}
             disabled={isExtracting}
+            aria-pressed={preferredLang === lang}
             onClick={() => setPreferredLang(lang)}
-            className={`transition-all duration-200 cursor-pointer ${
-              preferredLang === lang
-                ? 'bg-platzi-green/10 border border-platzi-green/50 text-platzi-green rounded-full px-4 py-2 text-sm font-medium'
-                : 'bg-dark-700 border border-dark-600 text-neutral-400 rounded-full px-4 py-2 text-sm hover:border-dark-500 disabled:opacity-50 disabled:cursor-not-allowed'
-            }`}
+            className="animate-state-change"
+            style={{ animationDelay: `${index * 35}ms` }}
           >
-            <span className="mr-2">{FLAGS[lang] || '🏳️'}</span>
-            {NAMES[lang] || lang}
-          </button>
+            <span className="font-mono text-xs uppercase">{lang}</span>
+            <span>{LANGUAGE_NAME_KEYS[lang] ? t(LANGUAGE_NAME_KEYS[lang]) : lang}</span>
+          </Button>
         ))}
 
-        <button
+        <Button
+          type="button"
+          size="sm"
+          variant={preferredLang === 'all' ? 'secondary' : 'outline'}
           disabled={isExtracting}
+          aria-pressed={preferredLang === 'all'}
           onClick={() => setPreferredLang('all')}
-          className={`transition-all duration-200 cursor-pointer flex items-center gap-2 ${
-            preferredLang === 'all'
-              ? 'bg-dark-700 border border-dashed border-platzi-green/50 text-platzi-green rounded-full px-4 py-2 text-sm font-medium'
-              : 'bg-dark-700 border border-dashed border-dark-600 text-neutral-400 rounded-full px-4 py-2 text-sm hover:border-dark-500 disabled:opacity-50 disabled:cursor-not-allowed'
-          }`}
+          className="animate-state-change"
+          style={{ animationDelay: `${detectedLangs.length * 35}ms` }}
         >
-          <Globe className="w-4 h-4" />
-          Todos
-        </button>
+          <Globe className="h-4 w-4" aria-hidden="true" />
+          {t('subtitles.all')}
+        </Button>
       </div>
-    </div>
+    </fieldset>
   );
 };

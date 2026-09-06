@@ -1,4 +1,4 @@
-export const Progress = ({ value = 0, className = '', ...divProps }) => {
+export const Progress = ({ value = 0, className = '', indicatorClassName = '', ...divProps }) => {
   const numericValue = Number(value);
   const clampedValue = Number.isFinite(numericValue)
     ? Math.min(100, Math.max(0, numericValue))
@@ -14,7 +14,7 @@ export const Progress = ({ value = 0, className = '', ...divProps }) => {
       className={`relative h-2 w-full overflow-hidden rounded-full bg-muted ${className}`}
     >
       <div
-        className="h-full bg-primary transition-[width] duration-200 ease-out"
+        className={`h-full rounded-full bg-primary transition-[width,opacity] duration-state ease-motion ${indicatorClassName}`}
         style={{ width: `${clampedValue}%` }}
       />
     </div>

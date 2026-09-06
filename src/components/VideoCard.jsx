@@ -1,109 +1,126 @@
-import { CheckCircle2, CircleDashed, Loader2, AlertCircle, Download } from 'lucide-react';
+import { AlertCircle, CheckCircle2, CircleDashed, Download, Loader2 } from 'lucide-react';
 import { useSettingsStore } from '../store/settingsStore';
 import { useSubtitleStore } from '../store/subtitleStore';
 import { downloadVideoTxt } from '../utils/downloader';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
+import { useI18n } from '../i18n';
 
 export const VideoCard = ({ video, index }) => {
   const preferredLang = useSettingsStore(state => state.preferredLang);
   const updateVideo = useSubtitleStore(state => state.updateVideo);
   const isExtracting = useSubtitleStore(state => state.isExtracting);
   const courseInfo = useSubtitleStore(state => state.courseInfo);
+  const { t } = useI18n();
 
   const statusConfig = {
     pending: {
-      color: 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400',
-      icon: <CircleDashed className="w-4 h-4" />,
-      text: 'Pendiente'
+      variant: 'muted',
+      icon: <CircleDashed className="h-3.5 w-3.5" aria-hidden="true" />,
+      text: t('video.status.pending'),
     },
     extracting: {
-      color: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-500/10 dark:text-yellow-400 border border-yellow-500/20',
-      icon: <Loader2 className="w-4 h-4 animate-spin" />,
-      text: 'Extrayendo...'
+      variant: 'warning',
+      icon: <Loader2 className="h-3.5 w-3.5 animate-spin-slow" aria-hidden="true" />,
+      text: t('video.status.extracting'),
     },
     ready: {
-      color: 'bg-platzi-green/20 text-platzi-green-hover dark:bg-platzi-green/10 dark:text-platzi-green border border-platzi-green/20',
-      icon: <CheckCircle2 className="w-4 h-4" />,
-      text: 'Listo'
+      variant: 'success',
+      icon: <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />,
+      text: t('video.status.ready'),
     },
     'no-video': {
-      color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-500/20',
-      icon: <AlertCircle className="w-4 h-4" />,
-      text: 'No es video'
+      variant: 'default',
+      icon: <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />,
+      text: t('video.status.noVideo'),
     },
     error: {
-      color: 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400 border border-red-500/20',
-      icon: <AlertCircle className="w-4 h-4" />,
-      text: 'Error'
-    }
+      variant: 'destructive',
+      icon: <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />,
+      text: t('video.status.error'),
+    },
   };
 
-  const status = statusConfig[video.status];
-
-  // Helper to determine if a lang badge should be shown based on selection
-  const showLangBadge = (lang) => {
-    if (preferredLang === 'all') return true;
-    return lang === preferredLang;
-  };
-
+  const status = statusConfig[video.status] || statusConfig.pending;
+  const statusBorder = {
+    pending: 'border-l-border',
+    extracting: 'border-l-warning',
+    ready: 'border-l-success',
+    'no-video': 'border-l-primary',
+    error: 'border-l-destructive',
+  }[video.status] || 'border-l-border';
+  const shouldStagger = index < 6;
+  const showLangBadge = lang => preferredLang === 'all' || lang === preferredLang;
   const canDownloadSingle =
     video.status === 'ready' &&
     video.extractedContent &&
     Object.keys(video.extractedContent).length > 0;
 
   return (
-    <div className={`bg-white dark:bg-dark-700 border ${video.selected ? 'border-platzi-green/40 shadow-lg shadow-platzi-green/5' : 'border-neutral-200 dark:border-dark-600'} rounded-2xl overflow-hidden hover:border-platzi-green/40 transition-all duration-200 flex flex-col sm:flex-row items-start sm:items-center p-4 gap-4 animate-fade-in`}>
-      
-      <div className="flex items-center self-start sm:self-auto mt-1 sm:mt-0">
-        <input 
-          type="checkbox" 
-          checked={video.selected}
+    <article
+      role="listitem"
+      style={shouldStagger ? { animationDelay: `${index * 45}ms` } : undefined}
+      className={
+        'flex flex-col gap-3 rounded-lg border border-border/70 border-l-2 p-4 transition-[background-color,border-color,box-shadow,opacity,transform] duration-state ease-motion hover:-translate-y-px hover:border-primary/20 hover:shadow-[0_10px_28px_-22px_hsl(var(--black)/0.75)] sm:flex-row sm:items-center sm:gap-4 sm:p-5 ' +
+        (shouldStagger ? 'animate-result-reveal ' : '') +
+        statusBorder + ' ' +
+        (video.selected ? 'bg-primary/[0.04]' : 'bg-card')
+      }
+    >
+      <label className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-accent/30">
+        <input
+          type="checkbox"
+          checked={Boolean(video.selected)}
           disabled={isExtracting}
-          onChange={(e) => updateVideo(video.id, { selected: e.target.checked })}
-          className="w-5 h-5 rounded border-neutral-300 dark:border-dark-500 text-platzi-green focus:ring-platzi-green/50 dark:bg-dark-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          onChange={event => updateVideo(video.id, { selected: event.target.checked })}
+          aria-label={t('video.selectClass', { title: video.title })}
+          className="h-5 w-5 cursor-pointer rounded border-input accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
-      </div>
+      </label>
 
-      <div className="flex-grow min-w-0">
-        <h3 className={`font-medium truncate ${video.selected ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-500 dark:text-neutral-400'}`} title={video.title}>
+      <div className="min-w-0 flex-1">
+        <h3
+          className={video.selected ? 'break-words font-medium text-card-foreground' : 'break-words font-medium text-muted-foreground'}
+          title={video.title}
+        >
           {video.title}
         </h3>
-        <p className="text-neutral-500 text-sm mt-1">
-          {video.duration}
-        </p>
+        <p className="mt-1 font-mono text-xs text-muted-foreground">{video.duration}</p>
       </div>
 
-      <div className={`flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto ${!video.selected && 'opacity-50'}`}>
-        {/* Languge badges */}
-        <div className="flex gap-1.5 mr-auto sm:mr-4">
+      <div className={video.selected ? 'flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end' : 'flex w-full flex-wrap items-center gap-2 opacity-60 sm:w-auto sm:justify-end'}>
+        <div className="flex flex-wrap items-center gap-1.5 sm:mr-2">
           {video.availableLangs?.filter(showLangBadge).map(lang => (
-            <span key={lang} className="bg-platzi-green/10 text-platzi-green text-xs rounded-full px-2 py-0.5 border border-platzi-green/20 uppercase">
+            <Badge key={lang} variant="default" className="font-mono uppercase">
               {lang}
-            </span>
+            </Badge>
           ))}
-          {/* Si el preferido no está disponible (mock logic) */}
           {preferredLang !== 'all' && video.availableLangs?.length > 0 && !video.availableLangs.includes(preferredLang) && (
-            <span className="bg-red-500/10 text-red-400 text-xs rounded-full px-2 py-0.5 border border-red-500/20">
-              {preferredLang} (N/A)
-            </span>
+            <Badge variant="destructive" className="font-mono uppercase">
+              {preferredLang} N/A
+            </Badge>
           )}
         </div>
 
-        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${status.color}`}>
+        <Badge key={video.status} variant={status.variant} className="animate-status-enter">
           {status.icon}
           {status.text}
-        </div>
+        </Badge>
 
         {canDownloadSingle && (
-          <button
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
             onClick={() => downloadVideoTxt(video, preferredLang, courseInfo?.courseSlug, index)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap bg-neutral-100 text-neutral-700 hover:bg-neutral-200 dark:bg-dark-800 dark:text-neutral-200 dark:hover:bg-dark-600 transition-colors"
-            title="Descargar esta clase"
+            aria-label={t('video.downloadAria', { title: video.title })}
           >
-            <Download className="w-4 h-4" />
-            Clase TXT
-          </button>
+            <Download className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">{t('video.classTxt')}</span>
+            <span className="sm:hidden">TXT</span>
+          </Button>
         )}
       </div>
-    </div>
+    </article>
   );
 };

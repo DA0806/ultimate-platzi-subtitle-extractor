@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 
-export const useSubtitleStore = create((set, get) => ({
+export const useSubtitleStore = create((set) => ({
   videos: [], // { id, slug, title, duration, url, status: 'pending'|'extracting'|'ready'|'error', selected: boolean, availableLangs: [], extractedContent: {} }
   isExtracting: false,
   progress: 0,
+  extractionNotice: null,
   detectedLangs: [], // ['es', 'en', ...] available for the current context
   courseInfo: null, // { title, slug }
 
@@ -19,7 +20,8 @@ export const useSubtitleStore = create((set, get) => ({
     videos: state.videos.map(v => ({ ...v, selected }))
   })),
 
-  startExtraction: () => set({ isExtracting: true, progress: 0 }),
+  startExtraction: () => set({ isExtracting: true, progress: 0, extractionNotice: null }),
+  setExtractionNotice: (notice) => set({ extractionNotice: notice }),
   
   updateProgress: () => set((state) => {
     const selectedVideos = state.videos.filter(v => v.selected);
@@ -37,6 +39,7 @@ export const useSubtitleStore = create((set, get) => ({
     videos: [],
     isExtracting: false,
     progress: 0,
+    extractionNotice: null,
     detectedLangs: [],
     courseInfo: null
   })

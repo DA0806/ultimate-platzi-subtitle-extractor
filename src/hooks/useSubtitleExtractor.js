@@ -3,12 +3,23 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useAuthStore } from '../store/authStore';
 import axios from 'axios';
 import { parseVtt } from '../utils/vttParser';
+import { translate } from '../i18n';
 
 const SUPPORTED_LANGS = ['es', 'en', 'pt', 'de', 'fr'];
+const REQUEST_GAP_MS = 400;
+const BLOCK_PAGE_PATTERNS = [
+  /just a moment/i,
+  /verify you are human/i,
+  /access denied/i,
+  /too many requests/i,
+  /rate limit(?:ed)?/i,
+];
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const inferLangFromUrl = (url) => {
   const lower = url.toLowerCase();
-  const match = lower.match(/(?:^|[\/_\-.])(es|en|pt|de|fr)(?:\.vtt|[\/_\-.?&]|$)/i);
+  const match = lower.match(/(?:^|[-/_.])(es|en|pt|de|fr)(?:\.vtt|[-/_.?&]|$)/i);
   return match ? match[1] : null;
 };
 
@@ -32,21 +43,82 @@ const extractVttUrls = (html) => {
   return Array.from(new Set(cleanedUrls));
 };
 
-const fetchTextWithRetry = async (url, config, retries = 2) => {
+const isRetryableError = (error) => {
+  const status = error?.response?.status;
+  return !status || [408, 425, 500, 502, 503, 504].includes(status);
+};
+
+const getRetryDelay = (error, attempt) => {
+  const retryAfterSeconds = Number(error?.response?.headers?.['retry-after']);
+  if (Number.isFinite(retryAfterSeconds)) {
+    return Math.min(retryAfterSeconds * 1000, 30_000);
+  }
+  return 500 * (2 ** attempt);
+};
+
+const requestWithRetry = async (url, config, beforeRequest, retries = 2) => {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
+      await beforeRequest?.();
       const response = await axios.get(url, config);
-      return response.data;
+      return response;
     } catch (error) {
       lastError = error;
+      if (attempt >= retries || !isRetryableError(error)) {
+        break;
+      }
+      await sleep(getRetryDelay(error, attempt));
     }
   }
   throw lastError;
 };
 
+const isBlockedResponse = (body) => (
+  typeof body === 'string' && BLOCK_PAGE_PATTERNS.some(pattern => pattern.test(body))
+);
+
+const createBlockedResponseError = () => {
+  const error = new Error('Platzi devolvió una página de protección');
+  error.code = 'PLATZI_BLOCKED_PAGE';
+  return error;
+};
+
+const getExtractionNotice = (error) => {
+  if (error?.code === 'PLATZI_BLOCKED_PAGE') {
+    return translate('extractionNotice.blocked');
+  }
+
+  const status = error?.response?.status;
+  if (status === 429) {
+    return translate('extractionNotice.rateLimited');
+  }
+  if (status === 403) {
+    return translate('extractionNotice.forbidden');
+  }
+  if (status === 401) {
+    return translate('extractionNotice.unauthorized');
+  }
+  if (status >= 500 && status <= 599) {
+    return translate('extractionNotice.server', { status });
+  }
+  if (['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET'].includes(error?.code)) {
+    return translate('extractionNotice.network');
+  }
+  return null;
+};
+
 export const useSubtitleExtractor = () => {
-  const { videos, updateVideo, startExtraction, stopExtraction, updateProgress, isExtracting, courseInfo } = useSubtitleStore();
+  const {
+    videos,
+    updateVideo,
+    startExtraction,
+    stopExtraction,
+    updateProgress,
+    setExtractionNotice,
+    isExtracting,
+    courseInfo,
+  } = useSubtitleStore();
   const preferredLang = useSettingsStore(state => state.preferredLang);
   const sessionCookie = useAuthStore(state => state.cookie);
 
@@ -60,9 +132,40 @@ export const useSubtitleExtractor = () => {
     // Concurrency (reducida a 2 para no saturar al servidor al pedir el HTML de cada página)
     const CONCURRENCY = 2;
     let index = 0;
+    let stopRequested = false;
+    let lastRequestStartedAt = 0;
+    let requestQueue = Promise.resolve();
+
+    // ponytail: una cola en memoria por extracción; si hay varios trabajos simultáneos,
+    // mover este límite a un scheduler por cuenta.
+    const waitForRequestSlot = async () => {
+      let release;
+      const previousRequest = requestQueue;
+      requestQueue = new Promise(resolve => {
+        release = resolve;
+      });
+
+      await previousRequest;
+      const elapsed = Date.now() - lastRequestStartedAt;
+      const waitTime = Math.max(0, REQUEST_GAP_MS - elapsed);
+      if (waitTime > 0) {
+        await sleep(waitTime);
+      }
+      lastRequestStartedAt = Date.now();
+      release();
+    };
+
+    const registerFailure = (error) => {
+      const notice = getExtractionNotice(error);
+      if (!notice) return false;
+
+      stopRequested = true;
+      setExtractionNotice(notice);
+      return true;
+    };
 
     const worker = async () => {
-      while (index < pendingVideos.length) {
+      while (!stopRequested && index < pendingVideos.length) {
         const video = pendingVideos[index++];
         
         updateVideo(video.id, { status: 'extracting' });
@@ -78,11 +181,15 @@ export const useSubtitleExtractor = () => {
             headers['x-platzi-cookie'] = sessionCookie;
           }
 
-          const res = await axios.get(proxyUrl, { headers });
+          const res = await requestWithRetry(proxyUrl, { headers }, waitForRequestSlot);
           const html = res.data;
 
           // 2. Extraer URLs VTT, incluyendo variantes escapadas en scripts JSON
           const uniqueVttUrls = extractVttUrls(html);
+
+          if (uniqueVttUrls.length === 0 && isBlockedResponse(html)) {
+            throw createBlockedResponseError();
+          }
 
           const extractedContent = {};
           let hasSuccess = false;
@@ -121,11 +228,16 @@ export const useSubtitleExtractor = () => {
                   proxyHeaders['x-platzi-cookie'] = sessionCookie;
                 }
 
-                const vttData = await fetchTextWithRetry(proxyVttUrl, {
+                const vttResponse = await requestWithRetry(proxyVttUrl, {
                   headers: proxyHeaders,
                   responseType: 'text',
                   transformResponse: [(data) => data],
-                }, 2);
+                }, waitForRequestSlot);
+                const vttData = vttResponse.data;
+
+                if (isBlockedResponse(vttData)) {
+                  throw createBlockedResponseError();
+                }
                 const cleanText = parseVtt(vttData);
 
                 if (cleanText) {
@@ -134,6 +246,7 @@ export const useSubtitleExtractor = () => {
                 }
               } catch (err) {
                 console.error(`Error descargando VTT desde ${vttUrl}`, err);
+                if (registerFailure(err)) break;
               }
             }
           }
@@ -156,6 +269,7 @@ export const useSubtitleExtractor = () => {
 
         } catch (error) {
           console.error(`Error procesando clase ${video.slug}`, error);
+          registerFailure(error);
           updateVideo(video.id, { status: 'error' });
         } finally {
           updateProgress();

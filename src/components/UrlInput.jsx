@@ -1,53 +1,72 @@
 import { useState } from 'react';
+import { AlertCircle, Search } from 'lucide-react';
 import { useCourseParser } from '../hooks/useCourseParser';
 import { useLanguageDetect } from '../hooks/useLanguageDetect';
-import { Search, Loader2 } from 'lucide-react';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { translateCourseError, useI18n } from '../i18n';
 
-export const UrlInput = () => {
+export const UrlInput = ({ onLoadingChange }) => {
   const [url, setUrl] = useState('');
   const { parseUrl, isParsing, error } = useCourseParser();
-  const { detectLangs } = useLanguageDetect();
+  const { detectLangs, isDetecting } = useLanguageDetect();
+  const { language, t } = useI18n();
+  const isLoading = isParsing || isDetecting;
+  const errorMessage = error ? translateCourseError(error, language) : '';
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!url.trim()) return;
+  const handleSubmit = async event => {
+    event.preventDefault();
+    if (!url.trim() || isLoading) return;
+
+    onLoadingChange?.(true);
 
     try {
       await parseUrl(url);
       await detectLangs();
     } catch (err) {
       console.error(err);
+    } finally {
+      onLoadingChange?.(false);
     }
   };
 
   return (
-    <div className="w-full">
-      <form onSubmit={handleSubmit} className="relative flex items-center">
-        <div className="absolute left-4 text-neutral-500">
-          <Search className="w-5 h-5" />
+    <form onSubmit={handleSubmit} className="w-full" aria-busy={isLoading}>
+      <label htmlFor="course-url" className="text-sm font-medium text-card-foreground">{t('url.label')}</label>
+      <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            id="course-url"
+            type="url"
+            value={url}
+            onChange={event => setUrl(event.target.value)}
+            placeholder="https://platzi.com/cursos/..."
+            disabled={isLoading}
+            invalid={Boolean(errorMessage)}
+            aria-describedby={errorMessage ? 'course-url-help course-url-error' : 'course-url-help'}
+            className="pl-10"
+            required
+          />
         </div>
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://platzi.com/cursos/..."
-          className="w-full bg-white dark:bg-dark-700 border border-neutral-300 dark:border-dark-600 rounded-xl pl-12 pr-32 py-4 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-platzi-green/50 focus:border-platzi-green transition-all duration-200 shadow-sm"
-          disabled={isParsing}
-        />
-        <button
-          type="submit"
-          disabled={isParsing || !url.trim()}
-          className="absolute right-2 top-2 bottom-2 bg-platzi-green hover:bg-platzi-green-hover text-black font-semibold rounded-lg px-6 transition-colors duration-200 disabled:opacity-50 flex items-center gap-2"
-        >
-          {isParsing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Extraer'}
-        </button>
-      </form>
-      {error && (
-        <p className="text-red-500 text-sm mt-2 flex items-center gap-1 animate-fade-in">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500"></span>
-          {error}
+        <Button type="submit" disabled={isLoading || !url.trim()} loading={isLoading} className="sm:min-w-36">
+          <span
+            key={isParsing ? 'parsing' : isDetecting ? 'detecting' : 'idle'}
+            className="animate-state-change"
+          >
+            {isParsing ? t('url.analyzing') : isDetecting ? t('url.detecting') : t('url.analyze')}
+          </span>
+        </Button>
+      </div>
+      <p id="course-url-help" className="mt-2 text-xs leading-5 text-muted-foreground">
+        {t('url.help')}
+      </p>
+      {errorMessage && (
+        <p id="course-url-error" role="alert" className="mt-2 flex items-start gap-2 text-sm text-destructive animate-fade-in">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{errorMessage}</span>
         </p>
       )}
-    </div>
+    </form>
   );
 };

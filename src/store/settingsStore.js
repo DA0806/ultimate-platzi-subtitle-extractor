@@ -6,11 +6,17 @@ export const useSettingsStore = create(
     (set) => ({
       theme: 'dark', // 'dark' or 'light'
       preferredLang: 'es', // default language to extract or 'all'
+      uiLanguage: 'es',
+      hasCompletedSetup: false,
       
       toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
       setTheme: (theme) => set({ theme }),
       
       setPreferredLang: (lang) => set({ preferredLang: lang }),
+      setUiLanguage: (language) => {
+        if (language === 'es' || language === 'en') set({ uiLanguage: language });
+      },
+      completeSetup: () => set({ hasCompletedSetup: true }),
     }),
     {
       name: 'platzi_settings',

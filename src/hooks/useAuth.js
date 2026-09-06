@@ -16,13 +16,8 @@ export const useAuth = () => {
   });
 
   const loginWithCookie = (cookieStr) => {
-    // Generate a mock user based on cookie presence
-    loginFn('mock_token_from_cookie', cookieStr, {
-      name: 'User (Cookie)',
-      email: 'cookie@user.com',
-      avatar: `https://ui-avatars.com/api/?name=C&background=98EC2D&color=0f0f0f`,
-      plan: 'Pro'
-    });
+    // Saving a cookie locally does not prove that the session is active.
+    loginFn(null, cookieStr, null);
   };
 
   return {
