@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Ultimate Platzi Subtitle Extractor",
+  "version": "1.0.0",
+  "description": "Extrae y descarga subtítulos de cursos y clases de Platzi.",
+  "action": {
+    "default_title": "Abrir Platzi Subtitle Extractor"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "cookies",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://platzi.com/*",
+    "*://*.platzi.com/*",
+    "*://static.platzi.com/*"
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
