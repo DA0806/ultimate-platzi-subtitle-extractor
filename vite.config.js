@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import https from 'https'
 import http from 'http'
+import { resolve } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 const MAX_REDIRECTS = 5;
 
@@ -28,6 +32,7 @@ const fetchWithRedirects = (targetUrl, headers, onResponse, onError, redirectCou
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [
     react(),
     {
@@ -80,6 +85,19 @@ export default defineConfig({
       }
     }
   ],
+  build: {
+    rollupOptions: {
+      input: {
+        index: resolve(__dirname, 'index.html'),
+        background: resolve(__dirname, 'src/background.js'),
+      },
+      output: {
+        entryFileNames: (chunkInfo) => (chunkInfo.name === 'background' ? 'background.js' : 'assets/[name]-[hash].js'),
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
+  },
   server: {
     proxy: {
       '/api/platzi': {
