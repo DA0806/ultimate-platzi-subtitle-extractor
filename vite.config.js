@@ -86,8 +86,8 @@ export default defineConfig({
         target: 'https://platzi.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/platzi/, ''),
-        configure: (proxy, options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
             proxyReq.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
             proxyReq.setHeader('Accept-Language', 'es-ES,es;q=0.9,en;q=0.8');
             proxyReq.setHeader('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');

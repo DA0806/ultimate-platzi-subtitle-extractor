@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 
 const inferLangFromUrl = (url) => {
   const lower = url.toLowerCase();
-  const match = lower.match(/(?:^|[\/_\-.])(es|en|pt|de|fr)(?:\.vtt|[\/_\-.?&]|$)/i);
+  const match = lower.match(/(?:^|[-/_.])(es|en|pt|de|fr)(?:\.vtt|[-/_.?&]|$)/i);
   return match ? match[1] : null;
 };
 
