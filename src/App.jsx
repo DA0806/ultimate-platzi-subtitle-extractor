@@ -15,6 +15,7 @@ import { CourseWorkspaceSkeleton } from './components/CourseWorkspaceSkeleton';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { useI18n } from './i18n';
+import { useExtensionAuth } from './hooks/useExtensionAuth';
 
 const COOKIE_TUTORIAL_HASH = '#cookie-tutorial';
 const SETUP_HASH = '#setup';
@@ -46,6 +47,7 @@ const getRoute = () => {
 const setupHash = step => `${SETUP_HASH}?step=${step}&context=setup`;
 
 function App() {
+  const { isAutoDetected } = useExtensionAuth();
   const [route, setRoute] = useState(getRoute);
   const [isCourseLoading, setIsCourseLoading] = useState(false);
   const theme = useSettingsStore(state => state.theme);
@@ -118,6 +120,7 @@ function App() {
       <div className="min-h-screen overflow-x-hidden bg-background text-foreground transition-colors duration-state ease-motion">
         <SetupWizard
           step={route.step || 1}
+          isAutoDetected={isAutoDetected}
           onStepChange={navigateToSetup}
           onOpenTutorial={() => navigateToTutorial('setup')}
           onComplete={() => {

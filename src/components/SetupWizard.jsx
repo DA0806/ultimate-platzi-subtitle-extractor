@@ -1,13 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, FileText, ListChecks, Sparkles } from 'lucide-react';
 import { AuthPanel } from './AuthPanel';
+import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { InterfaceLanguageSelect } from './InterfaceLanguageSelect';
 import { useI18n } from '../i18n';
+import { useAuthStore } from '../store/authStore';
 
-export const SetupWizard = ({ step = 1, onStepChange, onOpenTutorial, onComplete }) => {
-  const { t } = useI18n();
+export const SetupWizard = ({ step = 1, onStepChange, onOpenTutorial, onComplete, isAutoDetected: propIsAutoDetected }) => {
+  const { t, language } = useI18n();
+  const user = useAuthStore(state => state.user);
+  const token = useAuthStore(state => state.token);
+  const cookie = useAuthStore(state => state.cookie);
+
+  const hasValidCookie = Boolean(cookie?.trim() && !cookie.includes('mock_session_cookie'));
+  const isAutoDetected = propIsAutoDetected ?? Boolean(
+    hasValidCookie && (
+      user?.isAutoDetected ||
+      user?.email === 'Sesión detectada del navegador' ||
+      (typeof token === 'string' && token.startsWith('ext_'))
+    )
+  );
   const steps = [
     { number: 1, label: t('setup.welcome') },
     { number: 2, label: t('setup.features') },
@@ -47,7 +61,7 @@ export const SetupWizard = ({ step = 1, onStepChange, onOpenTutorial, onComplete
       window.cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
     };
-  }, [currentStep]);
+  }, [currentStep, isAutoDetected]);
 
   const goNext = () => {
     if (isLastStep) {
@@ -155,7 +169,43 @@ export const SetupWizard = ({ step = 1, onStepChange, onOpenTutorial, onComplete
                 </Card>
               )}
 
-              {currentStep === 3 && <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} />}
+              {currentStep === 3 && (
+                <div className="space-y-6">
+                  {isAutoDetected && (
+                    <Card className="border-success/30 bg-success/10 p-5 sm:p-6 animate-fade-in">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
+                            <Check className="h-5 w-5" aria-hidden="true" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h2 className="font-semibold text-card-foreground">
+                                {language === 'en' ? 'Active session detected' : 'Sesión activa detectada'}
+                              </h2>
+                              <Badge variant="success">Auto</Badge>
+                            </div>
+                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                              {language === 'en'
+                                ? 'Platzi session detected automatically from your browser. You don\'t need to manually copy the cookie.'
+                                : 'Sesión de Platzi detectada automáticamente desde tu navegador. No necesitas copiar manualmente la cookie.'}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          className="self-start shrink-0 sm:self-auto"
+                          onClick={onComplete}
+                        >
+                          {language === 'en' ? 'Continue to workspace' : 'Continuar al espacio de trabajo'}
+                          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </div>
+                    </Card>
+                  )}
+                  <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} />
+                </div>
+              )}
             </div>
           </div>
         </div>
