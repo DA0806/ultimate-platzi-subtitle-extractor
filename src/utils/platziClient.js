@@ -5,6 +5,74 @@ export const isExtension = () => (
   typeof chrome !== 'undefined' && Boolean(chrome?.runtime?.id)
 );
 
+export const fetchAllPlatziCookies = async () => {
+  if (!isExtension()) {
+    return null;
+  }
+
+  const queries = [
+    { url: 'https://platzi.com' },
+    { url: 'https://platzi.com/' },
+    { domain: '.platzi.com' },
+    { domain: 'platzi.com' },
+  ];
+
+  const cookieMap = new Map();
+
+  for (const query of queries) {
+    try {
+      const results = await new Promise((resolve) => {
+        chrome.cookies.getAll(query, (cookies) => {
+          if (chrome.runtime?.lastError || !cookies) {
+            resolve([]);
+          } else {
+            resolve(cookies);
+          }
+        });
+      });
+
+      for (const cookie of results) {
+        if (cookie && cookie.name && !cookieMap.has(cookie.name)) {
+          cookieMap.set(cookie.name, cookie);
+        }
+      }
+    } catch {
+      // Ignore individual query failures
+    }
+  }
+
+  const cookies = Array.from(cookieMap.values());
+  if (cookies.length === 0) {
+    return {
+      cookies: [],
+      cookieHeader: '',
+      hasSession: false,
+      hasCookies: false,
+      sessionId: null,
+      csrfToken: null,
+      cookieNames: [],
+    };
+  }
+
+  const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+  const sessionCookie = cookies.find((c) =>
+    c.name === 'sessionid' ||
+    c.name === 'platzi_session' ||
+    c.name.toLowerCase().includes('session')
+  );
+  const csrfCookie = cookies.find((c) => c.name === 'csrftoken');
+
+  return {
+    cookies,
+    cookieHeader,
+    hasSession: Boolean(sessionCookie),
+    hasCookies: cookies.length > 0,
+    sessionId: sessionCookie ? sessionCookie.value : null,
+    csrfToken: csrfCookie ? csrfCookie.value : null,
+    cookieNames: cookies.map((c) => c.name),
+  };
+};
+
 export const syncCookieToJar = async (cookieString) => {
   if (!isExtension() || !cookieString || typeof chrome?.cookies?.set !== 'function') {
     return;

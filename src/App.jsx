@@ -47,7 +47,13 @@ const getRoute = () => {
 const setupHash = step => `${SETUP_HASH}?step=${step}&context=setup`;
 
 function App() {
-  const { isAutoDetected } = useExtensionAuth();
+  const {
+    isAutoDetected,
+    isChecking: isCheckingAuth,
+    cookiesCount,
+    cookieNames,
+    refreshSession,
+  } = useExtensionAuth();
   const [route, setRoute] = useState(getRoute);
   const [isCourseLoading, setIsCourseLoading] = useState(false);
   const theme = useSettingsStore(state => state.theme);
@@ -100,13 +106,14 @@ function App() {
   const navigateToWorkspace = () => {
     if (window.location.hash) {
       window.location.hash = '';
+    } else {
+      setRoute({ view: 'workspace', context: 'tool' });
     }
   };
 
   if (route.view === 'tutorial') {
     return (
       <div className="min-h-screen overflow-x-hidden bg-background text-foreground transition-colors duration-state ease-motion">
-        <Header onNavigateToTutorial={() => navigateToTutorial(route.context)} />
         <CookieTutorial
           onBack={route.context === 'setup' ? () => navigateToSetup(3) : navigateToWorkspace}
           isSetupContext={route.context === 'setup'}
@@ -121,6 +128,10 @@ function App() {
         <SetupWizard
           step={route.step || 1}
           isAutoDetected={isAutoDetected}
+          isCheckingAuth={isCheckingAuth}
+          cookiesCount={cookiesCount}
+          cookieNames={cookieNames}
+          onRefreshSession={refreshSession}
           onStepChange={navigateToSetup}
           onOpenTutorial={() => navigateToTutorial('setup')}
           onComplete={() => {
@@ -141,7 +152,11 @@ function App() {
         {t('app.skipContent')}
       </a>
 
-      <Header onNavigateToTutorial={navigateToTutorial} />
+      <Header
+        onNavigateToTutorial={navigateToTutorial}
+        isAutoDetected={isAutoDetected}
+        onRefreshSession={refreshSession}
+      />
       <ProgressBar />
 
       <main id="main-content" className="mx-auto w-full max-w-6xl px-4 pb-56 pt-8 sm:px-6 sm:pb-48 sm:pt-12 lg:px-8">

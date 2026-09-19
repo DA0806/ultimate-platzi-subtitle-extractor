@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, FileText, ListChecks, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Cookie, FileText, ListChecks, RefreshCw, Sparkles } from 'lucide-react';
 import { AuthPanel } from './AuthPanel';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -7,8 +7,19 @@ import { Card } from './ui/Card';
 import { InterfaceLanguageSelect } from './InterfaceLanguageSelect';
 import { useI18n } from '../i18n';
 import { useAuthStore } from '../store/authStore';
+import { isExtension } from '../utils/platziClient';
 
-export const SetupWizard = ({ step = 1, onStepChange, onOpenTutorial, onComplete, isAutoDetected: propIsAutoDetected }) => {
+export const SetupWizard = ({
+  step = 1,
+  onStepChange,
+  onOpenTutorial,
+  onComplete,
+  isAutoDetected: propIsAutoDetected,
+  isCheckingAuth = false,
+  cookiesCount = 0,
+  cookieNames = [],
+  onRefreshSession,
+}) => {
   const { t, language } = useI18n();
   const user = useAuthStore(state => state.user);
   const token = useAuthStore(state => state.token);
@@ -132,25 +143,81 @@ export const SetupWizard = ({ step = 1, onStepChange, onOpenTutorial, onComplete
 
             <div className="mt-8">
               {currentStep === 1 && (
-                <Card className="border-primary/20 bg-card/90 p-5 sm:p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <FileText className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <h2 className="font-semibold text-card-foreground">{t('setup.studySpace')}</h2>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">{t('setup.studyDescription')}</p>
-                    </div>
-                  </div>
-                  <div className="mt-6 grid gap-3 border-t border-border pt-5 sm:grid-cols-3">
-                    {[t('setup.discover'), t('setup.select'), t('setup.review')].map((label, index) => (
-                      <div key={label} className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="font-mono text-xs text-primary">{String(index + 1).padStart(2, '0')}</span>
-                        <span>{label}</span>
+                <div className="space-y-4">
+                  {isExtension() && isAutoDetected && (
+                    <Card className="border-success/30 bg-success/10 p-5 sm:p-6 animate-fade-in">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
+                            <Check className="h-5 w-5" aria-hidden="true" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-card-foreground">¡Sesión de Platzi detectada automáticamente!</h3>
+                              <Badge variant="success">Auto</Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {cookiesCount > 0
+                                ? `Tu navegador tiene ${cookiesCount} cookies activas de Platzi (${cookieNames.slice(0, 3).join(', ')}...). No necesitas configurar nada.`
+                                : 'Tu navegador tiene la sesión activa de Platzi lista. Puedes empezar a extraer subtítulos de inmediato.'}
+                            </p>
+                          </div>
+                        </div>
+                        <Button type="button" onClick={onComplete} className="shrink-0 self-start sm:self-auto">
+                          Entrar al espacio de trabajo
+                          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                        </Button>
                       </div>
-                    ))}
-                  </div>
-                </Card>
+                    </Card>
+                  )}
+
+                  {isExtension() && !isAutoDetected && (
+                    <Card className="border-primary/30 bg-primary/10 p-4 animate-fade-in">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                          <Cookie className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                          <div>
+                            <h3 className="text-sm font-semibold text-card-foreground">Detección automática de sesión</h3>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              Inicia sesión en <a href="https://platzi.com" target="_blank" rel="noreferrer" className="text-primary underline">platzi.com</a> en este navegador y pulsa Detectar para omitir la configuración de cookies.
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={onRefreshSession}
+                          disabled={isCheckingAuth}
+                          className="shrink-0 self-start sm:self-auto"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${isCheckingAuth ? 'animate-spin' : ''}`} aria-hidden="true" />
+                          {isCheckingAuth ? 'Buscando...' : 'Detectar sesión'}
+                        </Button>
+                      </div>
+                    </Card>
+                  )}
+
+                  <Card className="border-primary/20 bg-card/90 p-5 sm:p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <FileText className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h2 className="font-semibold text-card-foreground">{t('setup.studySpace')}</h2>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">{t('setup.studyDescription')}</p>
+                      </div>
+                    </div>
+                    <div className="mt-6 grid gap-3 border-t border-border pt-5 sm:grid-cols-3">
+                      {[t('setup.discover'), t('setup.select'), t('setup.review')].map((label, index) => (
+                        <div key={label} className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className="font-mono text-xs text-primary">{String(index + 1).padStart(2, '0')}</span>
+                          <span>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </div>
               )}
 
               {currentStep === 2 && (
@@ -171,39 +238,82 @@ export const SetupWizard = ({ step = 1, onStepChange, onOpenTutorial, onComplete
 
               {currentStep === 3 && (
                 <div className="space-y-6">
-                  {isAutoDetected && (
-                    <Card className="border-success/30 bg-success/10 p-5 sm:p-6 animate-fade-in">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
-                            <Check className="h-5 w-5" aria-hidden="true" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h2 className="font-semibold text-card-foreground">
-                                {language === 'en' ? 'Active session detected' : 'Sesión activa detectada'}
-                              </h2>
-                              <Badge variant="success">Auto</Badge>
+                  {isAutoDetected ? (
+                    <div className="space-y-4">
+                      <Card className="border-success/30 bg-success/10 p-5 sm:p-6 animate-fade-in">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
+                              <Check className="h-5 w-5" aria-hidden="true" />
                             </div>
-                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                              {language === 'en'
-                                ? 'Platzi session detected automatically from your browser. You don\'t need to manually copy the cookie.'
-                                : 'Sesión de Platzi detectada automáticamente desde tu navegador. No necesitas copiar manualmente la cookie.'}
-                            </p>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h2 className="font-semibold text-card-foreground">
+                                  {language === 'en' ? 'Active session detected' : 'Sesión activa detectada'}
+                                </h2>
+                                <Badge variant="success">Auto</Badge>
+                              </div>
+                              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                {language === 'en'
+                                  ? 'Platzi session detected automatically from your browser. You don\'t need to manually copy the cookie.'
+                                  : 'Sesión de Platzi detectada automáticamente desde tu navegador. No necesitas copiar manualmente la cookie.'}
+                              </p>
+                              {cookiesCount > 0 && (
+                                <p className="mt-1 font-mono text-xs text-muted-foreground">
+                                  Cookies: {cookieNames.slice(0, 4).join(', ')} ({cookiesCount} en total)
+                                </p>
+                              )}
+                            </div>
                           </div>
+                          <Button
+                            type="button"
+                            className="self-start shrink-0 sm:self-auto"
+                            onClick={onComplete}
+                          >
+                            {language === 'en' ? 'Continue to workspace' : 'Continuar al espacio de trabajo'}
+                            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                          </Button>
                         </div>
-                        <Button
-                          type="button"
-                          className="self-start shrink-0 sm:self-auto"
-                          onClick={onComplete}
-                        >
-                          {language === 'en' ? 'Continue to workspace' : 'Continuar al espacio de trabajo'}
-                          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                        </Button>
-                      </div>
-                    </Card>
+                      </Card>
+
+                      <details className="rounded-lg border border-border bg-card/40 p-4 text-xs text-muted-foreground">
+                        <summary className="cursor-pointer font-medium text-foreground hover:text-primary">
+                          ¿Deseas ingresar una cookie manualmente? (Opcional)
+                        </summary>
+                        <div className="mt-4">
+                          <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} />
+                        </div>
+                      </details>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {isExtension() && (
+                        <Card className="border-primary/30 bg-primary/10 p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-start gap-3">
+                              <Cookie className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                              <div>
+                                <h3 className="text-sm font-semibold text-card-foreground">Detección de sesión en Platzi</h3>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  Si ya tienes la sesión iniciada en <a href="https://platzi.com" target="_blank" rel="noreferrer" className="text-primary underline">platzi.com</a>, la extensión puede leerla automáticamente sin que copies nada.
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={onRefreshSession}
+                              disabled={isCheckingAuth}
+                              className="shrink-0 self-start sm:self-auto"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${isCheckingAuth ? 'animate-spin' : ''}`} aria-hidden="true" />
+                              {isCheckingAuth ? 'Detectando...' : 'Detectar sesión'}
+                            </Button>
+                          </div>
+                        </Card>
+                      )}
+                      <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} />
+                    </div>
                   )}
-                  <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} />
                 </div>
               )}
             </div>

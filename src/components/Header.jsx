@@ -10,7 +10,7 @@ import { useI18n } from '../i18n';
 
 const HEADER_ACTION_CLASS = 'border border-border/90 bg-card/80 text-foreground hover:border-primary/50 hover:bg-card hover:!text-foreground';
 
-export const Header = ({ onNavigateToTutorial }) => {
+export const Header = ({ onNavigateToTutorial, isAutoDetected, onRefreshSession }) => {
   const cookie = useAuthStore(state => state.cookie);
   const theme = useSettingsStore(state => state.theme);
   const toggleTheme = useSettingsStore(state => state.toggleTheme);
@@ -32,7 +32,7 @@ export const Header = ({ onNavigateToTutorial }) => {
               <p className="truncate text-xs text-muted-foreground">{t('header.subtitle')}</p>
             </div>
             <div className="ml-3 hidden border-l border-border pl-4 sm:block">
-              <SessionBadge cookie={cookie} />
+              <SessionBadge cookie={cookie} isAutoDetected={isAutoDetected} />
             </div>
           </div>
 
@@ -74,6 +74,7 @@ export const Header = ({ onNavigateToTutorial }) => {
         onClose={handleCloseAuth}
         onOpenTutorial={onNavigateToTutorial}
         triggerRef={sessionButtonRef}
+        onRefreshSession={onRefreshSession}
       />
     </>
   );

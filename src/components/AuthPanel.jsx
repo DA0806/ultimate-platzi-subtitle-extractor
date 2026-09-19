@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, BookOpen, CheckCircle, Cookie, LogOut, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, CheckCircle, Cookie, LogOut, RefreshCw, Sparkles, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useAuthStore } from '../store/authStore';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { useI18n } from '../i18n';
+import { isExtension, fetchAllPlatziCookies } from '../utils/platziClient';
 
-export const AuthPanel = ({ isOpen, onClose, onOpenTutorial, triggerRef, embedded = false }) => {
+export const AuthPanel = ({ isOpen, onClose, onOpenTutorial, triggerRef, embedded = false, onRefreshSession }) => {
   const { loginWithCookie, logout } = useAuth();
   const cookie = useAuthStore(state => state.cookie);
   const panelRef = useRef(null);
   const [cookieStr, setCookieStr] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [detectionMsg, setDetectionMsg] = useState(null);
   const { t } = useI18n();
 
   useEffect(() => {
@@ -104,6 +107,47 @@ export const AuthPanel = ({ isOpen, onClose, onOpenTutorial, triggerRef, embedde
             </div>
           ) : (
             <div className="flex flex-col gap-4">
+              {isExtension() && (
+                <div className="flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/10 p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
+                      <span className="text-xs font-semibold text-card-foreground">Detección automática de sesión</span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={async () => {
+                        setIsDetecting(true);
+                        setDetectionMsg(null);
+                        try {
+                          await onRefreshSession?.();
+                          const res = await fetchAllPlatziCookies();
+                          if (res && (res.hasSession || res.hasCookies) && res.cookieHeader) {
+                            loginWithCookie(res.cookieHeader);
+                            setShowSuccess(true);
+                            setDetectionMsg(`¡Sesión detectada con éxito! (${res.cookieNames.length} cookies encontradas: ${res.cookieNames.slice(0, 4).join(', ')}...)`);
+                            window.setTimeout(() => setShowSuccess(false), 3000);
+                          } else {
+                            setDetectionMsg('No se encontraron cookies de Platzi. Inicia sesión en platzi.com en este navegador.');
+                          }
+                        } catch {
+                          setDetectionMsg('Error al consultar cookies del navegador.');
+                        } finally {
+                          setIsDetecting(false);
+                        }
+                      }}
+                      disabled={isDetecting}
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${isDetecting ? 'animate-spin' : ''}`} aria-hidden="true" />
+                      {isDetecting ? 'Detectando...' : 'Detectar sesión'}
+                    </Button>
+                  </div>
+                  {detectionMsg && (
+                    <p className="text-[11px] text-muted-foreground">{detectionMsg}</p>
+                  )}
+                </div>
+              )}
               {isMockCookie && <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>{t('auth.invalidCookie')}</p></div>}
               <div className="flex items-start gap-3 rounded-md border border-border bg-secondary/50 px-3 py-3"><Cookie className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" /><div><p className="text-sm font-medium text-card-foreground">{t('auth.notConfigured')}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{t('auth.pasteCookieDescription')}</p></div></div>
               <form onSubmit={handleCookieLogin} className="flex flex-col gap-2">
