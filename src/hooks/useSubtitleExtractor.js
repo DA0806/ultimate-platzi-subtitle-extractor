@@ -1,7 +1,7 @@
 import { useSubtitleStore } from '../store/subtitleStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useAuthStore } from '../store/authStore';
-import axios from 'axios';
+import { getPlatziPage, getVtt } from '../utils/platziClient';
 import { parseVtt } from '../utils/vttParser';
 import { translate } from '../i18n';
 
@@ -44,24 +44,25 @@ const extractVttUrls = (html) => {
 };
 
 const isRetryableError = (error) => {
-  const status = error?.response?.status;
+  const status = error?.response?.status || error?.status;
   return !status || [408, 425, 500, 502, 503, 504].includes(status);
 };
 
 const getRetryDelay = (error, attempt) => {
-  const retryAfterSeconds = Number(error?.response?.headers?.['retry-after']);
+  const retryAfter = error?.response?.headers?.['retry-after'] || error?.response?.headers?.get?.('retry-after');
+  const retryAfterSeconds = Number(retryAfter);
   if (Number.isFinite(retryAfterSeconds)) {
     return Math.min(retryAfterSeconds * 1000, 30_000);
   }
   return 500 * (2 ** attempt);
 };
 
-const requestWithRetry = async (url, config, beforeRequest, retries = 2) => {
+const requestWithRetry = async (requestFn, beforeRequest, retries = 2) => {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       await beforeRequest?.();
-      const response = await axios.get(url, config);
+      const response = await requestFn();
       return response;
     } catch (error) {
       lastError = error;
@@ -89,7 +90,7 @@ const getExtractionNotice = (error) => {
     return translate('extractionNotice.blocked');
   }
 
-  const status = error?.response?.status;
+  const status = error?.response?.status || error?.status;
   if (status === 429) {
     return translate('extractionNotice.rateLimited');
   }
@@ -171,17 +172,11 @@ export const useSubtitleExtractor = () => {
         updateVideo(video.id, { status: 'extracting' });
         
         try {
-          // 1. Obtener el HTML de la página de la clase a través del proxy para no tener CORS
-          const parsedUrl = new URL(video.url);
-          const proxyUrl = `/api/platzi${parsedUrl.pathname}`;
-          const headers = {
-            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
-          };
-          if (sessionCookie) {
-            headers['x-platzi-cookie'] = sessionCookie;
-          }
-
-          const res = await requestWithRetry(proxyUrl, { headers }, waitForRequestSlot);
+          // 1. Obtener el HTML de la página de la clase usando adapter unificado
+          const res = await requestWithRetry(
+            () => getPlatziPage(video.url, sessionCookie),
+            waitForRequestSlot
+          );
           const html = res.data;
 
           // 2. Extraer URLs VTT, incluyendo variantes escapadas en scripts JSON
@@ -219,20 +214,11 @@ export const useSubtitleExtractor = () => {
                   continue;
                 }
 
-                // Descarga de VTT a través del proxy con headers de sesion/referer
-                const proxyVttUrl = `/api/proxy?url=${encodeURIComponent(vttUrl)}`;
-                const proxyHeaders = {
-                  'x-proxy-referer': video.url,
-                };
-                if (sessionCookie) {
-                  proxyHeaders['x-platzi-cookie'] = sessionCookie;
-                }
-
-                const vttResponse = await requestWithRetry(proxyVttUrl, {
-                  headers: proxyHeaders,
-                  responseType: 'text',
-                  transformResponse: [(data) => data],
-                }, waitForRequestSlot);
+                // Descarga de VTT usando adapter unificado
+                const vttResponse = await requestWithRetry(
+                  () => getVtt(vttUrl, video.url, sessionCookie),
+                  waitForRequestSlot
+                );
                 const vttData = vttResponse.data;
 
                 if (isBlockedResponse(vttData)) {

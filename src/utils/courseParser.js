@@ -1,5 +1,5 @@
-import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { getPlatziPage } from './platziClient';
 
 const EXCLUDED_CLASS_SLUGS = new Set([
   'opiniones',
@@ -34,19 +34,8 @@ export const parsePlatziUrl = async (url) => {
     const courseSlug = pathParts[1];
     const isSingleVideo = pathParts.length > 2;
     
-    // Configurar fetch usando el proxy de Vite
-    const proxyUrl = `/api/platzi${parsedUrl.pathname}`;
-    
     const sessionCookie = useAuthStore.getState().cookie;
-    
-    const headers = {
-      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
-    };
-    if (sessionCookie) {
-      headers['x-platzi-cookie'] = sessionCookie;
-    }
-
-    const response = await axios.get(proxyUrl, { headers });
+    const response = await getPlatziPage(url, sessionCookie);
     const html = response.data;
     
     // Utilizar DOMParser para analizar el HTML estático de Platzi
@@ -157,14 +146,14 @@ export const parsePlatziUrl = async (url) => {
        const sessionCookie = useAuthStore.getState().cookie;
        if (err.response.status === 404) {
          if (!sessionCookie) {
-           throw new Error('Curso no accesible (Error 404). Este curso probablemente requiere autenticación. Configura tu cookie de sesión primero.');
+           throw new Error('Curso no accesible (Error 404). Este curso probablemente requiere autenticación. Configura tu cookie de sesión primero.', { cause: err });
          }
-         throw new Error('Curso no encontrado (Error 404). Verifica la URL o que tu cookie de sesión no haya expirado.');
+         throw new Error('Curso no encontrado (Error 404). Verifica la URL o que tu cookie de sesión no haya expirado.', { cause: err });
        }
-       if (err.response.status === 403) throw new Error('Acceso denegado (Error 403). Verifica tus cookies o protección anti-bot.');
-       throw new Error(`Error ${err.response.status}: Revisa tus cookies de sesión.`);
+       if (err.response.status === 403) throw new Error('Acceso denegado (Error 403). Verifica tus cookies o protección anti-bot.', { cause: err });
+       throw new Error(`Error ${err.response.status}: Revisa tus cookies de sesión.`, { cause: err });
     }
-    throw new Error(err.message || 'URL inválida o error procesando el curso.');
+    throw new Error(err.message || 'URL inválida o error procesando el curso.', { cause: err });
   }
 };
 
