@@ -32,3 +32,6 @@ dist-ssr
 
 # Worktrees
 worktrees/
+
+# Archives
+*.zip
