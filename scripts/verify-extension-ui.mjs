@@ -18,7 +18,6 @@ if (!browserPath) {
 
 const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), 'upse-extension-ui-'));
 const artifactPath = path.join(os.tmpdir(), 'upse-extension-ui-artifacts');
-fs.rmSync(artifactPath, { recursive: true, force: true });
 fs.mkdirSync(artifactPath, { recursive: true });
 const consoleErrors = [];
 let context;
