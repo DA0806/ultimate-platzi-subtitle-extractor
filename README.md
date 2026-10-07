@@ -2,7 +2,7 @@
 
 ## Extensión de Chrome
 
-La versión 1.0.3 se puede empaquetar para cargarla localmente en Chrome:
+La versión 1.0.5 se puede empaquetar para cargarla localmente en Chrome:
 
 ```bash
 npm run build:extension
@@ -14,7 +14,9 @@ La extensión funciona sin ejecutar `npm run dev` ni un servidor propio. Inicia 
 
 El flujo de extensión no solicita ni procesa pagos. Usa la herramienta con contenido y una cuenta a los que tengas derecho de acceso y respeta las condiciones de Platzi.
 
-Desde Ajustes, **Borrar datos de UPSE** elimina solamente las claves locales `platzi_session` y `platzi_settings` de esta aplicación. No borra cookies, no cierra la sesión de Platzi ni modifica el historial del navegador.
+Desde Ajustes, **Borrar datos de UPSE** elimina solamente las preferencias de UPSE y los restos de autenticación local heredados (`platzi_session` y `platzi_settings`). No borra cookies del navegador, no cierra la sesión de Platzi, no elimina archivos TXT/ZIP exportados ni modifica el historial del navegador.
+
+Consulta la [Política de privacidad](docs/PRIVACY_POLICY.md) y la [guía de privacidad para Chrome Web Store](docs/CHROME_WEB_STORE_PRIVACY.md). Son documentación preparada para revisión; esta versión no se ha publicado todavía en Chrome Web Store.
 
 UPSE es una aplicación local y experimental para obtener los subtítulos de un curso o una clase de Platzi, convertirlos a texto limpio y descargarlos para lectura, búsqueda o estudio sin conexión.
 
@@ -26,7 +28,7 @@ El árbol actual incluye un rework visual y técnico respecto a la versión orig
 
 - tokens de diseño para colores, radios, espaciado, foco y movimiento;
 - primitivas reutilizables de UI (`Button`, `Input`, `Card`, `Badge` y `Progress`);
-- setup inicial de tres pasos y una guía específica para copiar la cookie;
+- setup inicial de tres pasos con acceso por navegador en la extensión y cookie manual solo en el modo web local;
 - skeleton de carga, estados por clase, barra de progreso persistente y avisos de pausa;
 - reintentos con backoff, separación entre solicitudes, concurrencia limitada y detección de páginas de protección de Platzi;
 - mejoras de teclado, foco visible, etiquetas semánticas, anuncios de estado y respeto por `prefers-reduced-motion`.
@@ -43,9 +45,9 @@ Comparación acotada a diferencias observables en el código actual:
 
 ## Flujo de usuario
 
-1. En el primer acceso, completa el setup de bienvenida, funciones y sesión. La cookie es opcional para comenzar.
+1. En el primer acceso, completa el setup de bienvenida, funciones y acceso. En la extensión se usa el perfil del navegador; en el modo web local la cookie manual es opcional para comenzar.
 2. Pega una URL de curso o clase de Platzi (`/cursos/...` o `/clases/...`) y pulsa **Analizar URL**.
-3. UPSE solicita el HTML mediante el proxy local, obtiene las clases del curso o prepara la clase individual y detecta idiomas a partir de la primera clase disponible.
+3. La extensión solicita el HTML directamente a Platzi con las credenciales nativas del perfil. El modo web local usa el proxy de Vite y, si se configuró, la cookie manual.
 4. Selecciona las clases y el idioma (`es`, `en`, `pt`, `de`, `fr` o **Todos**).
 5. Inicia la extracción. Cada clase puede quedar como `Listo`, `Sin video` o `Error`; las clases de lectura o quiz no se tratan como video.
 6. Cuando termina, copia el texto o descarga un TXT o ZIP. Las clases con error pueden reintentarse después de corregir la causa o esperar a que Platzi deje de limitar las solicitudes.
@@ -80,10 +82,11 @@ Scripts definidos en `package.json`:
 | --- | --- |
 | `npm run dev` | Inicia Vite en desarrollo, con los proxies necesarios para consultar Platzi. |
 | `npm run build` | Genera la aplicación estática en `dist/`. |
+| `npm run build:extension` | Compila la extensión y crea `dist/upse-extension.zip`. |
 | `npm run preview` | Sirve localmente el contenido ya construido de `dist/`. |
 | `npm run lint` | Ejecuta ESLint sobre el proyecto. |
 
-Para usar la extracción completa, ejecuta `npm run dev` y abre la URL local que muestre Vite, normalmente `http://localhost:5173`.
+Para usar el modo web local, ejecuta `npm run dev` y abre la URL local que muestre Vite, normalmente `http://localhost:5173`. Para la extensión, instala la carpeta `dist/` desempaquetada en un perfil del navegador y abre UPSE desde su icono.
 
 ### Proxy solo en desarrollo
 
@@ -93,7 +96,7 @@ El proxy está definido en `vite.config.js` y solo lo instala el servidor de des
 - `GET /api/static/<ruta>`: reenvía a `https://static.platzi.com/<ruta>`.
 - `GET /api/proxy?url=<URL-encoded>`: proxy genérico para los VTT; acepta `x-platzi-cookie` y `x-proxy-referer`, sigue hasta cinco redirecciones y expone headers CORS básicos.
 
-`dist/` contiene archivos estáticos y `npm run preview` sirve esos archivos sin ejecutar `configureServer` ni `server.proxy`. Por tanto, **la extracción no funciona allí automáticamente**: para este flujo debe usarse `npm run dev` o debe existir un backend/proxy externo que no forma parte del repositorio.
+`dist/` contiene archivos estáticos. `npm run preview` sirve esos archivos sin ejecutar `configureServer` ni `server.proxy`, por lo que el modo web local necesita `npm run dev`; la extensión empaquetada no depende de ese proxy.
 
 ## Formatos de exportación
 
@@ -108,9 +111,9 @@ El parser convierte VTT a texto plano eliminando cabecera, marcas de tiempo, ide
 
 - **React 19 + Vite 8**: entrada de la aplicación, servidor de desarrollo y build.
 - **`App.jsx`**: composición de setup, tutorial, workspace, selección, extracción y exportación; las vistas de setup/tutorial se resuelven mediante el hash de la URL.
-- **Zustand**: `authStore` persiste la cookie y `settingsStore` persiste preferencias, tema y finalización del setup. El estado del curso y de los subtítulos vive en `subtitleStore` en memoria.
+- **Zustand**: el modo web local puede persistir una cookie manual y `settingsStore` persiste preferencias, tema y finalización del setup. La extensión no lee ni persiste cookies; conserva solo un marcador local de compatibilidad. El estado del curso y de los subtítulos vive en `subtitleStore` en memoria.
 - **Parser**: `useCourseParser` y `courseParser.js` validan la ruta, consultan el HTML y construyen la lista de clases.
-- **Extracción**: `useSubtitleExtractor` encuentra URLs `.vtt`, infiere idiomas, descarga mediante proxy, usa `vttParser` y actualiza el estado por clase.
+- **Extracción**: `useSubtitleExtractor` encuentra URLs `.vtt`, infiere idiomas, descarga mediante las credenciales nativas de la extensión o mediante el proxy web local, usa `vttParser` y actualiza el estado por clase.
 - **Resiliencia**: las solicitudes reintentables usan hasta dos reintentos, backoff exponencial y `Retry-After` cuando está disponible; la extracción se pausa ante bloqueos, errores temporales o límites de Platzi.
 - **Exportación**: `downloader.js` usa FileSaver y JSZip; `textMerger.js` construye el TXT unificado.
 - **UI**: Tailwind CSS, tokens CSS en `src/index.css`, Lucide React y primitivas en `src/components/ui/`.
@@ -119,16 +122,17 @@ El parser convierte VTT a texto plano eliminando cabecera, marcas de tiempo, ide
 
 - Platzi puede cambiar su HTML, sus rutas de cursos o la forma de publicar los subtítulos; cualquiera de esos cambios puede romper el análisis.
 - Cloudflare, límites de solicitudes, respuestas `401`, `403`, `404`, `429` o errores del servidor pueden detener la extracción.
-- Una cookie puede expirar, no tener permisos para el curso o requerir que se copie de nuevo desde una sesión válida.
+- En la extensión, Platzi puede devolver `401` o `403` si el perfil no tiene sesión o permiso para el contenido; en el modo web local, la cookie manual puede expirar o requerir que se copie de nuevo.
 - La detección de idiomas se basa en nombres o rutas de VTT reconocibles y en la primera clase consultada; no garantiza que todos los idiomas estén disponibles en cada clase.
-- El contenido extraído no se persiste entre recargas. La cookie y las preferencias sí se mantienen localmente hasta que se desconectan o se limpian los datos del navegador.
+- El contenido extraído no se persiste entre recargas. Las preferencias se mantienen localmente hasta que se limpian; el modo web local también puede mantener una cookie manual. La extensión no almacena las cookies del navegador.
 - No hay backend propio, login automático, validación independiente de sesión ni procesamiento de archivos subidos.
 
 ## Privacidad y uso responsable
 
-- La cookie de Platzi es un credencial de sesión. No la compartas, publiques ni la incluyas en capturas, logs o tickets.
-- La aplicación guarda esa cookie en el almacenamiento local del navegador; no es un almacén cifrado. Usa el equipo y el perfil de navegador adecuados y desconéctala cuando termines.
-- Las solicitudes se realizan desde tu instalación local hacia Platzi mediante el proxy de desarrollo. Revisa el código y la configuración antes de exponer el servidor en una red.
+- En la extensión, las URLs, el HTML y los VTT se solicitan desde tu navegador a Platzi; el navegador gestiona sus cookies y las envía a Platzi. UPSE no lee, copia ni guarda esos valores y no tiene backend ni telemetría propia.
+- La extensión mantiene preferencias locales y limpia restos de autenticación heredados de versiones anteriores cuando corresponde. **Borrar datos de UPSE** no borra cookies del navegador ni archivos TXT/ZIP que ya exportaste.
+- En el modo web local, la cookie manual sí se guarda en `platzi_session` y se envía al proxy local de Vite. No uses ese modo en un servidor expuesto.
+- La hoja de estilos solicita fuentes a Google Fonts y el tutorial puede solicitar un video a Cloudinary; son recursos web ordinarios de la interfaz y sus proveedores pueden tratar metadatos ordinarios conforme a sus propias políticas.
 - Usa la herramienta con tu propia cuenta, respeta los términos de Platzi, los permisos de los cursos y los derechos de autor. La extracción está pensada para uso personal, educativo y de estudio; no redistribuyas contenido protegido.
 
 ## Estructura de carpetas

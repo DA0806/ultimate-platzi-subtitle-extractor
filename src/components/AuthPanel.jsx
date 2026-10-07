@@ -350,6 +350,14 @@ export const AuthPanel = ({
           <div className="border-t border-border pt-5">
             <h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{t('settings.storageGroup')}</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('settings.storageDesc')}</p>
+            <a
+              href="https://github.com/DA0806/ultimate-platzi-subtitle-extractor/blob/feat/browser-extension/docs/PRIVACY_POLICY.md"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-sm text-primary underline-offset-2 hover:underline"
+            >
+              {language === 'en' ? 'Read privacy policy' : 'Leer política de privacidad'}
+            </a>
             <div className="mt-3">
               <Button
                 type="button"

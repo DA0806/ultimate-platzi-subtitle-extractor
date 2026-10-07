@@ -1,168 +1,65 @@
-# Guía de Instalación y Uso: Extensión de Navegador UPSE
+# Guía de la extensión UPSE 1.0.5
 
-Esta guía explica paso a paso cómo compilar, instalar, utilizar y compartir el **Ultimate Platzi Subtitle Extractor (UPSE)** como una extensión de navegador moderna (Manifest V3) basada en Chromium (Google Chrome, Brave, Microsoft Edge, Opera, etc.).
+Esta guía describe la extensión Manifest V3 de Ultimate Platzi Subtitle Extractor (UPSE), su instalación local y sus dos modos de acceso. La entrega está preparada para revisión; todavía no significa que la extensión haya sido publicada o aprobada por Chrome Web Store.
 
----
+## Qué hace la extensión
 
-## 🚀 Ventajas Clave frente a una Web Tradicional
+UPSE abre un espacio de trabajo en una pestaña del navegador. Recibe una URL de curso o clase de Platzi, solicita el HTML y las pistas VTT, permite seleccionar clases e idiomas y genera archivos TXT o ZIP localmente.
 
-A diferencia de una aplicación web alojada en internet o un script tradicional, la extensión de navegador ofrece ventajas determinantes:
+La extensión 1.0.5 usa el flujo introducido en 1.0.4: las peticiones a `https://platzi.com` y `https://static.platzi.com` usan las credenciales nativas del perfil mediante `fetch` con `credentials: include`. La extensión no usa `chrome.cookies`, no copia encabezados Cookie, no guarda valores de cookies y no tiene un servidor propio. El acceso a un curso se comprueba cuando Platzi responde a la solicitud; el indicador de la interfaz no valida identidad, suscripción ni autorización premium.
 
-| Característica | Web Alojada Tradicional | Extensión UPSE (Manifest V3) |
-| :--- | :--- | :--- |
-| **Costo y Servidores** | Requiere servidores, proxies y backend con costos mensuales. | **100% gratuita y sin servidores.** Todo corre localmente en tu navegador. |
-| **Protección Cloudflare** | Las IPs de servidores cloud suelen ser bloqueadas o desafiadas por Cloudflare. | **Cero bloqueos por IP.** Las peticiones salen desde tu propia conexión residencial de usuario real. |
-| **Problemas de CORS** | Bloqueado por las políticas del navegador al consultar dominios externos. | **Sin bloqueos CORS.** Manifest V3 otorga permisos directos sobre los dominios de Platzi. |
-| **Autenticación** | Requiere copiar y pegar manualmente cookies complejas con F12 / DevTools. | **Autenticación automática mágica.** Detecta la sesión activa de Platzi en tu navegador. |
+El modo web local conserva un flujo separado para desarrollo: Vite puede recibir una cookie introducida manualmente y reenviarla a través de sus proxies locales. Ese flujo no describe el comportamiento de la extensión empaquetada.
 
----
+## Compilar y empaquetar
 
-## 🛠️ 1. Cómo Compilar la Extensión (Para Desarrolladores)
+Requisitos: Node.js compatible con Vite 8 (`^20.19.0` o `>=22.12.0`) y npm.
 
-Si clonaste el repositorio o realizaste cambios en el código fuente, compilar la extensión toma menos de un minuto:
-
-### Requisitos Previos
-* **Node.js**: Versión 20 o superior (ej. Node 20 LTS o Node 22+).
-* **npm**: Incluido con Node.js.
-
-### Pasos de compilación
-
-1. Abre tu terminal en la raíz del proyecto:
-   ```bash
-   cd "D:/Proyectos/Visual Studio Projects/ultimate-platzi-subtitle-extractor/worktrees/browser-extension"
-   ```
-
-2. Instala las dependencias (solo la primera vez):
-   ```bash
-   npm install
-   ```
-
-3. Compila el paquete de producción:
-   ```bash
-   npm run build
-   ```
-
-4. **Resultado**: Se creará o actualizará la carpeta **`dist/`**.
-   
-   Esta carpeta contiene todo lo necesario para que el navegador ejecute la extensión:
-   * `manifest.json`: Configuración y permisos de Manifest V3.
-   * `background.js`: Service worker en segundo plano para abrir pestañas y gestionar cookies.
-   * `index.html`: La consola de extracción en pestaña completa.
-   * `assets/`: Lógica de React 19, Tailwind CSS y componentes empaquetados.
-   * `icons/`: Iconos en distintas resoluciones para la barra del navegador.
-
----
-
-## 🌐 2. Cómo Instalar la Extensión en tu Navegador
-
-Puedes instalar la extensión en cualquier navegador basado en Chromium: **Google Chrome**, **Brave**, **Microsoft Edge**, **Opera** o **Vivaldi**.
-
-### Paso a paso:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Abre chrome://extensions en la barra de direcciones       │
-├─────────────────────────────────────────────────────────────┤
-│ 2. Activa el interruptor [Modo de desarrollador] (arriba der)│
-├─────────────────────────────────────────────────────────────┤
-│ 3. Haz clic en el botón [Cargar descomprimida]              │
-├─────────────────────────────────────────────────────────────┤
-│ 4. Selecciona la carpeta "dist/" del proyecto               │
-├─────────────────────────────────────────────────────────────┤
-│ 5. ¡Listo! Fija el icono 📌 en tu barra de herramientas     │
-└─────────────────────────────────────────────────────────────┘
+```bash
+npm install
+npm run lint
+npm run build:extension
 ```
 
-### Instrucciones detalladas por navegador:
+`build:extension` ejecuta el build de Vite y crea `dist/upse-extension.zip`. El ZIP contiene el `manifest.json`, el service worker, la aplicación estática, los iconos y los assets con rutas relativas. El paquete no incluye un servidor Node ni necesita `npm run dev` para el flujo de extensión.
 
-#### En Google Chrome / Brave:
-1. En una nueva pestaña, escribe `chrome://extensions` (en Brave: `brave://extensions`) y presiona `Enter`.
-2. En la esquina superior derecha, activa la casilla o interruptor **"Modo de desarrollador"** (*Developer mode*).
-3. Aparecerán nuevos botones en la barra superior. Haz clic en **"Cargar descomprimida"** (*Load unpacked*).
-4. Navega hasta el directorio del proyecto y selecciona la carpeta **`dist`**.
-5. Verás la tarjeta de la extensión **Ultimate Platzi Subtitle Extractor** con su versión e icono.
-6. Haz clic en el icono de pieza de rompecabezas (Extensiones) en la barra superior del navegador y pulsa el pin 📌 junto a UPSE para tenerlo siempre a mano.
+## Instalar localmente en Chrome o Edge
 
-#### En Microsoft Edge:
-1. Escribe `edge://extensions` en la barra de direcciones.
-2. En el menú lateral izquierdo, activa el interruptor **"Modo de desarrollador"**.
-3. Haz clic en **"Cargar extensión sin empaquetar"**.
-4. Selecciona la carpeta **`dist`** y fija el icono en la barra de herramientas.
+1. Descomprime `dist/upse-extension.zip` en una carpeta de trabajo. También puedes usar directamente la carpeta `dist/` recién generada.
+2. Abre `chrome://extensions` en Google Chrome o `edge://extensions` en Microsoft Edge.
+3. Activa **Modo de desarrollador**.
+4. Selecciona **Cargar descomprimida** (Chrome) o **Cargar extensión sin empaquetar** (Edge) y elige la carpeta que contiene el `manifest.json` en su raíz.
+5. Fija UPSE desde el menú de extensiones y pulsa su icono. El service worker abre la consola en una pestaña completa.
 
-#### En Opera / Opera GX:
-1. Escribe `opera://extensions` en la barra de direcciones.
-2. En la esquina superior derecha, activa **"Modo de desarrollador"**.
-3. Haz clic en **"Cargar extensión descomprimida"** y selecciona la carpeta **`dist`**.
+Usa el mismo perfil del navegador en el que abriste Platzi. La extensión no puede trasladar una sesión desde otro perfil y no solicita que copies cookies.
 
----
+## Flujo de uso
 
-## 🪄 3. Cómo Usarla y Flujo de Trabajo
+1. Abre `https://platzi.com` en el mismo perfil e inicia sesión si el contenido requiere autenticación.
+2. Abre UPSE desde el icono de la extensión.
+3. Completa el setup de bienvenida, funciones y acceso por navegador. El setup no bloquea el uso por ausencia de una cookie detectable.
+4. Pega una URL de curso o clase, por ejemplo `https://platzi.com/cursos/react/`, y pulsa **Analizar URL**.
+5. Selecciona clases e idioma. UPSE conserva el resultado en memoria durante la sesión.
+6. Pulsa **Iniciar extracción**. Cada solicitud puede terminar como `Listo`, `Sin video` o `Error`.
+7. Copia el TXT o descarga un TXT unificado o ZIP. Los archivos exportados se crean mediante la descarga del navegador y quedan bajo el control del usuario.
 
-### Abrir la Consola
-Haz clic en el icono de **UPSE** en tu barra de herramientas. La extensión abrirá automáticamente la consola de trabajo (*Signal Console*) en una **pestaña completa** dedicada, ofreciéndote todo el espacio y comodidad para trabajar. Si ya tienes la pestaña abierta, al hacer clic en el icono el navegador te llevará directamente a ella.
+Un `401` o `403` de Platzi indica que la respuesta no autorizó esa solicitud; no debe interpretarse automáticamente como una sesión inválida, porque también pueden existir restricciones del contenido, cambios del sitio o controles de tráfico. UPSE no intenta evadir MFA, DRM, paywalls, límites ni controles de acceso.
 
-### Autenticación Mágica (Sin F12 ni copiar cookies)
-* Si ya iniciaste sesión en tu cuenta de Platzi (`platzi.com`) en ese mismo navegador, **UPSE detectará tu sesión de forma 100% automática y silenciosa**.
-* En la esquina superior derecha verás el indicador verde activo:
-  > 🟢 **Sesión Platzi activa** *(detectada automáticamente)*
-* No necesitas abrir las herramientas de desarrollador (F12), ni inspeccionar solicitudes de red, ni copiar encabezados `Cookie`.
-* **Fallback manual**: Si por alguna razón usas perfiles separados o la sesión no se detecta, siempre puedes ingresar a la configuración (icono de engranaje ⚙️) y pegar la cookie manualmente como respaldo.
+## Ajustes y limpieza
 
-### Extracción de Subtítulos Paso a Paso
+El engranaje permite cambiar idioma y tema, abrir Platzi y borrar los datos propios de UPSE. **Borrar datos de UPSE** requiere confirmación y solo elimina preferencias de la aplicación y restos de autenticación local heredados (`platzi_session` y `platzi_settings`).
 
-1. **Ingresa la URL**:
-   * Copia el enlace del curso o clase que deseas estudiar:
-     * Curso completo: `https://platzi.com/cursos/react/`
-     * Clase individual: `https://platzi.com/clases/1234-nombre-clase/`
-   * Pégala en el campo de origen y haz clic en **Analizar URL**.
-2. **Selecciona Idioma y Clases**:
-   * UPSE inspeccionará el curso y detectará automáticamente los idiomas disponibles (Español, Inglés, Portugués, etc.).
-   * Selecciona si deseas un idioma en particular o **Todos**.
-   * Marca o desmarca las clases que te interesen mediante las casillas de selección.
-3. **Inicia la Extracción**:
-   * Haz clic en **Iniciar extracción**.
-   * Observa el progreso clase por clase en tiempo real. La extensión realiza las peticiones respetando pausas de cortesía y reintentos automáticos para garantizar descargas limpias.
-4. **Descarga tus Subtítulos**:
-   * **Descargar ZIP**: Crea un archivo `.zip` ordenado con los subtítulos de cada clase en formato `.txt`. Si seleccionaste "Todos", creará carpetas organizadas por idioma.
-   * **Descargar TXT unificado**: Crea un único archivo de texto con todo el contenido del curso ordenado secuencialmente, ideal para alimentar herramientas de IA (NotebookLM, Claude, ChatGPT) o para leer sin distracciones.
-   * **Copiar al portapapeles**: Para transferir rápidamente el texto a tus notas.
+La acción no borra cookies del navegador, no cierra la sesión de Platzi, no modifica el historial y no elimina archivos TXT o ZIP que ya descargaste. Desinstalar la extensión elimina su almacenamiento de extensión según el navegador; los archivos exportados y la sesión de Platzi siguen siendo responsabilidad del usuario.
 
----
+## Privacidad y documentación para la tienda
 
-## 👥 4. Cómo Compartirla con Amigos (Sin que instalen Node.js)
+Lee la [Política de privacidad](PRIVACY_POLICY.md) para el alcance del procesamiento y la [guía de privacidad de Chrome Web Store](CHROME_WEB_STORE_PRIVACY.md) para las declaraciones preparadas del formulario. El enlace de contacto es <https://github.com/DA0806/ultimate-platzi-subtitle-extractor/issues>.
 
-Tus amigos, compañeros de estudio o colegas **NO necesitan saber programar, ni clonar repositorios con Git, ni instalar Node.js ni npm**.
+La extensión procesa URLs, HTML y VTT para extraer subtítulos, y mantiene preferencias localmente. Platzi recibe las peticiones y devuelve HTML o VTT al navegador; el navegador gestiona las cookies de Platzi y UPSE no recolecta ni persiste sus valores en la extensión. La hoja de estilos referencia Google Fonts y el tutorial puede solicitar un video de Cloudinary; esos proveedores pueden tratar metadatos ordinarios conforme a sus propias políticas.
 
-Para compartirles la herramienta lista para usar:
+## Evidencia y límites de validación
 
-1. **Compila la extensión en tu máquina**:
-   ```bash
-   npm run build
-   ```
-2. **Comprime la carpeta `dist/`**:
-   * Haz clic derecho sobre la carpeta `dist/` y selecciona **Comprimir en archivo ZIP** (puedes nombrarlo `UPSE-extension.zip`).
-3. **Envíales el archivo `.zip`** por correo, Telegram, Drive, etc.
-4. **Instrucciones para tus amigos**:
-   * Descomprimir el archivo `.zip` en cualquier carpeta de su computadora (por ejemplo, en `Documentos/UPSE`).
-   * Abrir `chrome://extensions` en su navegador (Chrome, Brave, Edge, etc.).
-   * Activar el **Modo de desarrollador**.
-   * Pulsar **Cargar descomprimida** y seleccionar esa carpeta.
-   * ¡Listo! Al abrir Platzi en su navegador e iniciar la extensión, tendrán su extractor personal funcionando al instante.
-
----
-
-## ❓ Preguntas Frecuentes y Solución de Problemas
-
-#### ¿Por qué algunas clases dicen "Sin video"?
-En Platzi existen clases que son lecturas escritas, enlaces a artículos, resúmenes o exámenes/quizzes. Estas clases no contienen un reproductor de video con pistas VTT asociadas. UPSE las identifica claramente para que no generen falsos errores.
-
-#### ¿Cómo actualizo la extensión cuando hay cambios en el código?
-1. Vuelve a ejecutar `npm run build` en la terminal.
-2. Ve a `chrome://extensions`.
-3. Busca la tarjeta de UPSE y haz clic en el botón de **Recargar** (icono de flecha circular 🔄).
-4. Refresca la pestaña del extractor.
-
-#### La sesión dice "Sin sesión" a pesar de tener Platzi abierto
-* Asegúrate de que la sesión esté iniciada en el mismo perfil de navegador donde instalaste la extensión.
-* Visita `platzi.com` para comprobar que tu avatar y cuenta aparecen activos.
-* Vuelve a la pestaña de UPSE y haz clic en el botón de refrescar sesión o recarga la pestaña (`F5`).
+- Se recibió una comprobación manual del usuario en Edge: con su sesión iniciada, la extensión instalada pudo extraer correctamente un curso real de Platzi.
+- También se recibió una comprobación manual en Chrome sin sesión con contenido público: se observaron las primeras dos clases de un curso público de GitHub y la primera transcripción pública. Eso no demuestra acceso a las 42 clases, no demuestra bypass de controles y no demuestra autorización para contenido premium.
+- Las pruebas automatizadas locales cubren el modo nativo sin la API `chrome.cookies`, las credenciales `include`, los límites de URL, la migración de almacenamiento heredado, el manifest, lint y el build del ZIP.
+- La comprobación automatizada del paquete cargó el service worker y la interfaz en un perfil temporal de Edge, sin errores propios; Chrome 154 está instalado, pero su canal automatizado no expuso la extensión aunque conservó los flags de carga. Las comprobaciones manuales de extracción del usuario corresponden a entregas anteriores y no prueban esta versión 1.0.5 en Chrome.
+- Sigue pendiente una prueba automatizada autenticada en un perfil limpio con una cuenta autorizada. No se copian credenciales del perfil del usuario para realizarla.
