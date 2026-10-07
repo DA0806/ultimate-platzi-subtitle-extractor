@@ -48,11 +48,8 @@ const setupHash = step => `${SETUP_HASH}?step=${step}&context=setup`;
 
 function App() {
   const {
-    isAutoDetected,
-    isChecking: isCheckingAuth,
-    cookiesCount,
-    cookieNames,
-    refreshSession,
+    browserAccess,
+    useBrowserSession,
   } = useExtensionAuth();
   const [route, setRoute] = useState(getRoute);
   const [isCourseLoading, setIsCourseLoading] = useState(false);
@@ -127,11 +124,8 @@ function App() {
       <div className="min-h-screen overflow-x-hidden bg-background text-foreground transition-colors duration-state ease-motion">
         <SetupWizard
           step={route.step || 1}
-          isAutoDetected={isAutoDetected}
-          isCheckingAuth={isCheckingAuth}
-          cookiesCount={cookiesCount}
-          cookieNames={cookieNames}
-          onRefreshSession={refreshSession}
+          browserAccess={browserAccess}
+          onUseBrowserSession={useBrowserSession}
           onStepChange={navigateToSetup}
           onOpenTutorial={() => navigateToTutorial('setup')}
           onComplete={() => {
@@ -154,8 +148,8 @@ function App() {
 
       <Header
         onNavigateToTutorial={navigateToTutorial}
-        isAutoDetected={isAutoDetected}
-        onRefreshSession={refreshSession}
+        browserAccess={browserAccess}
+        onUseBrowserSession={useBrowserSession}
       />
       <ProgressBar />
 

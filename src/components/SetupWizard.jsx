@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Cookie, FileText, ListChecks, RefreshCw, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ExternalLink, FileText, ListChecks, ShieldCheck, Sparkles } from 'lucide-react';
 import { AuthPanel } from './AuthPanel';
-import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { InterfaceLanguageSelect } from './InterfaceLanguageSelect';
 import { useI18n } from '../i18n';
-import { useAuthStore } from '../store/authStore';
 import { isExtension } from '../utils/platziClient';
 
 export const SetupWizard = ({
@@ -14,40 +12,51 @@ export const SetupWizard = ({
   onStepChange,
   onOpenTutorial,
   onComplete,
-  isAutoDetected: propIsAutoDetected,
-  isCheckingAuth = false,
-  cookiesCount = 0,
-  cookieNames = [],
-  onRefreshSession,
+  onUseBrowserSession,
 }) => {
-  const { t, language } = useI18n();
-  const user = useAuthStore(state => state.user);
-  const token = useAuthStore(state => state.token);
-  const cookie = useAuthStore(state => state.cookie);
+  const { t } = useI18n();
+  const isExt = isExtension();
 
-  const hasValidCookie = Boolean(cookie?.trim() && !cookie.includes('mock_session_cookie'));
-  const isAutoDetected = propIsAutoDetected ?? Boolean(
-    hasValidCookie && (
-      user?.isAutoDetected ||
-      user?.email === 'Sesión detectada del navegador' ||
-      (typeof token === 'string' && token.startsWith('ext_'))
-    )
-  );
   const steps = [
     { number: 1, label: t('setup.welcome') },
     { number: 2, label: t('setup.features') },
-    { number: 3, label: t('setup.cookie') },
+    { number: 3, label: isExt ? t('setup.extraction') : t('setup.cookie') },
   ];
+
   const stepCopy = {
-    1: { eyebrow: t('setup.welcomeEyebrow'), title: t('setup.welcomeTitle'), description: t('setup.welcomeDescription'), icon: FileText },
-    2: { eyebrow: t('setup.featuresEyebrow'), title: t('setup.featuresTitle'), description: t('setup.featuresDescription'), icon: ListChecks },
-    3: { eyebrow: t('setup.cookieEyebrow'), title: t('setup.cookieTitle'), description: t('setup.cookieDescription'), icon: Sparkles },
+    1: {
+      eyebrow: t('setup.welcomeEyebrow'),
+      title: t('setup.welcomeTitle'),
+      description: t('setup.welcomeDescription'),
+      icon: FileText,
+    },
+    2: {
+      eyebrow: t('setup.featuresEyebrow'),
+      title: t('setup.featuresTitle'),
+      description: t('setup.featuresDescription'),
+      icon: ListChecks,
+    },
+    3: isExt
+      ? {
+          eyebrow: t('setup.extStep3Eyebrow'),
+          title: t('setup.extStep3Title'),
+          description: t('setup.extStep3Description'),
+          icon: Sparkles,
+        }
+      : {
+          eyebrow: t('setup.cookieEyebrow'),
+          title: t('setup.cookieTitle'),
+          description: t('setup.cookieDescription'),
+          icon: Sparkles,
+        },
   };
+
   const featureRows = [
     [t('setup.discoverClasses'), t('setup.discoverClassesDescription')],
     [t('setup.chooseFocus'), t('setup.chooseFocusDescription')],
     [t('setup.exportReview'), t('setup.exportReviewDescription')],
   ];
+
   const currentStep = Math.min(Math.max(step, 1), steps.length);
   const isLastStep = currentStep === steps.length;
   const contentRef = useRef(null);
@@ -72,7 +81,7 @@ export const SetupWizard = ({
       window.cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
     };
-  }, [currentStep, isAutoDetected]);
+  }, [currentStep, isExt]);
 
   const goNext = () => {
     if (isLastStep) {
@@ -144,60 +153,6 @@ export const SetupWizard = ({
             <div className="mt-8">
               {currentStep === 1 && (
                 <div className="space-y-4">
-                  {isExtension() && isAutoDetected && (
-                    <Card className="border-success/30 bg-success/10 p-5 sm:p-6 animate-fade-in">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
-                            <Check className="h-5 w-5" aria-hidden="true" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-card-foreground">¡Sesión de Platzi detectada automáticamente!</h3>
-                              <Badge variant="success">Auto</Badge>
-                            </div>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {cookiesCount > 0
-                                ? `Tu navegador tiene ${cookiesCount} cookies activas de Platzi (${cookieNames.slice(0, 3).join(', ')}...). No necesitas configurar nada.`
-                                : 'Tu navegador tiene la sesión activa de Platzi lista. Puedes empezar a extraer subtítulos de inmediato.'}
-                            </p>
-                          </div>
-                        </div>
-                        <Button type="button" onClick={onComplete} className="shrink-0 self-start sm:self-auto">
-                          Entrar al espacio de trabajo
-                          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                        </Button>
-                      </div>
-                    </Card>
-                  )}
-
-                  {isExtension() && !isAutoDetected && (
-                    <Card className="border-primary/30 bg-primary/10 p-4 animate-fade-in">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-3">
-                          <Cookie className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-                          <div>
-                            <h3 className="text-sm font-semibold text-card-foreground">Detección automática de sesión</h3>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              Inicia sesión en <a href="https://platzi.com" target="_blank" rel="noreferrer" className="text-primary underline">platzi.com</a> en este navegador y pulsa Detectar para omitir la configuración de cookies.
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={onRefreshSession}
-                          disabled={isCheckingAuth}
-                          className="shrink-0 self-start sm:self-auto"
-                        >
-                          <RefreshCw className={`h-3.5 w-3.5 ${isCheckingAuth ? 'animate-spin' : ''}`} aria-hidden="true" />
-                          {isCheckingAuth ? 'Buscando...' : 'Detectar sesión'}
-                        </Button>
-                      </div>
-                    </Card>
-                  )}
-
                   <Card className="border-primary/20 bg-card/90 p-5 sm:p-6">
                     <div className="flex items-start gap-4">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -238,80 +193,60 @@ export const SetupWizard = ({
 
               {currentStep === 3 && (
                 <div className="space-y-6">
-                  {isAutoDetected ? (
-                    <div className="space-y-4">
-                      <Card className="border-success/30 bg-success/10 p-5 sm:p-6 animate-fade-in">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  {isExt ? (
+                    <Card className="border-primary/20 bg-card/90 p-5 sm:p-6">
+                      <ol className="divide-y divide-border">
+                        <li className="flex flex-col gap-3 py-4 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-start gap-4">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
-                              <Check className="h-5 w-5" aria-hidden="true" />
-                            </div>
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-semibold text-primary">
+                              01
+                            </span>
                             <div>
-                              <div className="flex items-center gap-2">
-                                <h2 className="font-semibold text-card-foreground">
-                                  {language === 'en' ? 'Active session detected' : 'Sesión activa detectada'}
-                                </h2>
-                                <Badge variant="success">Auto</Badge>
-                              </div>
-                              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                                {language === 'en'
-                                  ? 'Platzi session detected automatically from your browser. You don\'t need to manually copy the cookie.'
-                                  : 'Sesión de Platzi detectada automáticamente desde tu navegador. No necesitas copiar manualmente la cookie.'}
-                              </p>
-                              {cookiesCount > 0 && (
-                                <p className="mt-1 font-mono text-xs text-muted-foreground">
-                                  Cookies: {cookieNames.slice(0, 4).join(', ')} ({cookiesCount} en total)
-                                </p>
-                              )}
+                              <h2 className="text-sm font-medium text-card-foreground">{t('setup.stepOpenPlatzi')}</h2>
+                              <p className="mt-1 text-xs text-muted-foreground">{t('setup.stepOpenPlatziDesc')}</p>
                             </div>
                           </div>
                           <Button
                             type="button"
-                            className="self-start shrink-0 sm:self-auto"
-                            onClick={onComplete}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open('https://platzi.com/', '_blank', 'noopener,noreferrer')}
+                            className="shrink-0 self-start sm:self-auto"
                           >
-                            {language === 'en' ? 'Continue to workspace' : 'Continuar al espacio de trabajo'}
-                            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                            {t('setup.openPlatzi')}
                           </Button>
-                        </div>
-                      </Card>
+                        </li>
 
-                      <details className="rounded-lg border border-border bg-card/40 p-4 text-xs text-muted-foreground">
-                        <summary className="cursor-pointer font-medium text-foreground hover:text-primary">
-                          ¿Deseas ingresar una cookie manualmente? (Opcional)
-                        </summary>
-                        <div className="mt-4">
-                          <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} />
-                        </div>
-                      </details>
-                    </div>
+                        <li className="flex items-start gap-4 py-4">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-semibold text-primary">
+                            02
+                          </span>
+                          <div>
+                            <h2 className="text-sm font-medium text-card-foreground">{t('setup.stepCopyUrl')}</h2>
+                            <p className="mt-1 text-xs text-muted-foreground">{t('setup.stepCopyUrlDesc')}</p>
+                          </div>
+                        </li>
+
+                        <li className="flex items-start gap-4 py-4 last:pb-0">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-semibold text-primary">
+                            03
+                          </span>
+                          <div>
+                            <h2 className="text-sm font-medium text-card-foreground">{t('setup.stepPasteUrl')}</h2>
+                            <p className="mt-1 text-xs text-muted-foreground">{t('setup.stepPasteUrlDesc')}</p>
+                          </div>
+                        </li>
+                      </ol>
+
+                      <div className="mt-6 flex items-start gap-3 rounded-md border border-primary/20 bg-primary/5 p-3.5 text-xs leading-5 text-muted-foreground">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                        <p>{t('setup.extAccessNote')}</p>
+                      </div>
+                    </Card>
                   ) : (
                     <div className="space-y-4">
-                      {isExtension() && (
-                        <Card className="border-primary/30 bg-primary/10 p-4">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex items-start gap-3">
-                              <Cookie className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-                              <div>
-                                <h3 className="text-sm font-semibold text-card-foreground">Detección de sesión en Platzi</h3>
-                                <p className="mt-0.5 text-xs text-muted-foreground">
-                                  Si ya tienes la sesión iniciada en <a href="https://platzi.com" target="_blank" rel="noreferrer" className="text-primary underline">platzi.com</a>, la extensión puede leerla automáticamente sin que copies nada.
-                                </p>
-                              </div>
-                            </div>
-                            <Button
-                              type="button"
-                              onClick={onRefreshSession}
-                              disabled={isCheckingAuth}
-                              className="shrink-0 self-start sm:self-auto"
-                            >
-                              <RefreshCw className={`h-3.5 w-3.5 ${isCheckingAuth ? 'animate-spin' : ''}`} aria-hidden="true" />
-                              {isCheckingAuth ? 'Detectando...' : 'Detectar sesión'}
-                            </Button>
-                          </div>
-                        </Card>
-                      )}
-                      <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} />
+                      <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} onUseBrowserSession={onUseBrowserSession} />
                     </div>
                   )}
                 </div>
@@ -328,8 +263,8 @@ export const SetupWizard = ({
             </Button>
           )}
           <Button type="button" onClick={goNext}>
-            {currentStep === 1 ? t('setup.start') : isLastStep ? t('setup.finish') : t('setup.next')}
-            {!isLastStep && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+            {currentStep === 1 ? t('setup.start') : isLastStep ? (isExt ? t('setup.enterWorkspace') : t('setup.finish')) : t('setup.next')}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       </section>

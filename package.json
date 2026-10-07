@@ -1,11 +1,12 @@
 {
   "name": "ultimate-platzi-subtitle-extractor--upse-",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:extension": "npm run build && node scripts/package-extension.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

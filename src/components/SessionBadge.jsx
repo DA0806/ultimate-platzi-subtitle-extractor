@@ -1,23 +1,24 @@
-import { Cookie } from 'lucide-react';
+import { Globe2 } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { useI18n } from '../i18n';
 import { useAuthStore } from '../store/authStore';
+import { isExtension } from '../utils/platziClient';
 
-export const SessionBadge = ({ cookie: propCookie, isAutoDetected: propIsAutoDetected }) => {
-  const { t, language } = useI18n();
-  const user = useAuthStore(state => state.user);
-  const token = useAuthStore(state => state.token);
+export const SessionBadge = ({ cookie: propCookie }) => {
+  const { t } = useI18n();
   const storedCookie = useAuthStore(state => state.cookie);
   const cookie = propCookie ?? storedCookie;
-
+  const isExt = isExtension();
   const hasStoredCookie = Boolean(cookie?.trim() && !cookie.includes('mock_session_cookie'));
-  const isAutoDetected = propIsAutoDetected ?? Boolean(
-    hasStoredCookie && (
-      user?.isAutoDetected ||
-      user?.email === 'Sesión detectada del navegador' ||
-      (typeof token === 'string' && token.startsWith('ext_'))
-    )
-  );
+
+  if (isExt) {
+    return (
+      <Badge variant="muted" className="gap-2" title={t('session.extensionTitle')}>
+        <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
+        {t('session.extensionMode')}
+      </Badge>
+    );
+  }
 
   if (!hasStoredCookie) {
     return (
@@ -28,27 +29,8 @@ export const SessionBadge = ({ cookie: propCookie, isAutoDetected: propIsAutoDet
     );
   }
 
-  if (isAutoDetected) {
-    const label = language === 'en' ? 'Platzi session active' : 'Sesión Platzi activa';
-    const title = language === 'en'
-      ? 'Platzi session automatically detected from browser'
-      : 'Sesión de Platzi detectada automáticamente desde el navegador';
-
-    return (
-      <Badge variant="primary" className="gap-2 border-primary/30 bg-primary/15 text-primary" title={title}>
-        <span className="relative flex h-2 w-2" aria-hidden="true">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-        </span>
-        <Cookie className="h-3.5 w-3.5" aria-hidden="true" />
-        {label}
-      </Badge>
-    );
-  }
-
   return (
     <Badge variant="muted" className="gap-2" title={t('session.savedTitle')}>
-      <Cookie className="h-3.5 w-3.5" aria-hidden="true" />
       {t('session.saved')}
     </Badge>
   );

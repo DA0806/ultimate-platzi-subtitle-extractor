@@ -1,126 +1,45 @@
-/* global chrome */
 import axios from 'axios';
 
 export const isExtension = () => (
-  typeof chrome !== 'undefined' && Boolean(chrome?.runtime?.id)
+  typeof globalThis.chrome !== 'undefined' &&
+  Boolean(globalThis.chrome?.runtime?.id) &&
+  typeof location !== 'undefined' && location.protocol === 'chrome-extension:'
 );
 
-export const fetchAllPlatziCookies = async () => {
-  if (!isExtension()) {
+const parseHttpsUrl = (value) => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) {
+      return null;
+    }
+    return url;
+  } catch {
     return null;
   }
-
-  const queries = [
-    { url: 'https://platzi.com' },
-    { url: 'https://platzi.com/' },
-    { domain: '.platzi.com' },
-    { domain: 'platzi.com' },
-  ];
-
-  const cookieMap = new Map();
-
-  for (const query of queries) {
-    try {
-      const results = await new Promise((resolve) => {
-        chrome.cookies.getAll(query, (cookies) => {
-          if (chrome.runtime?.lastError || !cookies) {
-            resolve([]);
-          } else {
-            resolve(cookies);
-          }
-        });
-      });
-
-      for (const cookie of results) {
-        if (cookie && cookie.name && !cookieMap.has(cookie.name)) {
-          cookieMap.set(cookie.name, cookie);
-        }
-      }
-    } catch {
-      // Ignore individual query failures
-    }
-  }
-
-  const cookies = Array.from(cookieMap.values());
-  if (cookies.length === 0) {
-    return {
-      cookies: [],
-      cookieHeader: '',
-      hasSession: false,
-      hasCookies: false,
-      sessionId: null,
-      csrfToken: null,
-      cookieNames: [],
-    };
-  }
-
-  const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
-  const sessionCookie = cookies.find((c) =>
-    c.name === 'sessionid' ||
-    c.name === 'platzi_session' ||
-    c.name.toLowerCase().includes('session')
-  );
-  const csrfCookie = cookies.find((c) => c.name === 'csrftoken');
-
-  return {
-    cookies,
-    cookieHeader,
-    hasSession: Boolean(sessionCookie),
-    hasCookies: cookies.length > 0,
-    sessionId: sessionCookie ? sessionCookie.value : null,
-    csrfToken: csrfCookie ? csrfCookie.value : null,
-    cookieNames: cookies.map((c) => c.name),
-  };
 };
 
-export const syncCookieToJar = async (cookieString) => {
-  if (!isExtension() || !cookieString || typeof chrome?.cookies?.set !== 'function') {
-    return;
-  }
+export const isAllowedPlatziPageUrl = (value) => {
+  const url = parseHttpsUrl(value);
+  return Boolean(url && (url.hostname === 'platzi.com' || url.hostname === 'www.platzi.com'));
+};
 
-  const pairs = cookieString.split(';').map((s) => s.trim()).filter(Boolean);
-
-  for (const pair of pairs) {
-    const eqIdx = pair.indexOf('=');
-    if (eqIdx === -1) continue;
-    const name = pair.slice(0, eqIdx).trim();
-    const value = pair.slice(eqIdx + 1).trim();
-    if (!name) continue;
-
-    try {
-      await new Promise((resolve) => {
-        chrome.cookies.set(
-          {
-            url: 'https://platzi.com',
-            name,
-            value,
-            domain: '.platzi.com',
-            path: '/',
-            secure: true,
-          },
-          (cookie) => {
-            resolve(cookie);
-          }
-        );
-      });
-    } catch {
-      // Ignore individual cookie sync failures
-    }
-  }
+export const isAllowedVttUrl = (value) => {
+  const url = parseHttpsUrl(value);
+  return Boolean(url && url.hostname === 'static.platzi.com');
 };
 
 export const getPlatziPage = async (urlOrPath, sessionCookie = null) => {
   if (isExtension()) {
-    if (sessionCookie) {
-      await syncCookieToJar(sessionCookie);
-    }
-
     let targetUrl;
     if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
       targetUrl = urlOrPath;
     } else {
       const cleanPath = urlOrPath.startsWith('/') ? urlOrPath : `/${urlOrPath}`;
       targetUrl = `https://platzi.com${cleanPath}`;
+    }
+
+    if (!isAllowedPlatziPageUrl(targetUrl)) {
+      throw new Error('La URL debe pertenecer a https://platzi.com o https://www.platzi.com');
     }
 
     const headers = {
@@ -181,6 +100,10 @@ export const getPlatziPage = async (urlOrPath, sessionCookie = null) => {
 
 export const getVtt = async (vttUrl, referer = null, sessionCookie = null) => {
   if (isExtension()) {
+    if (!isAllowedVttUrl(vttUrl)) {
+      throw new Error('La URL de subtítulos debe pertenecer a https://static.platzi.com');
+    }
+
     const response = await fetch(vttUrl, {
       method: 'GET',
       credentials: 'include',

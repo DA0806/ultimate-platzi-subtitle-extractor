@@ -1,5 +1,21 @@
 # Ultimate Platzi Subtitle Extractor (UPSE)
 
+## Extensión de Chrome
+
+La versión 1.0.3 se puede empaquetar para cargarla localmente en Chrome:
+
+```bash
+npm run build:extension
+```
+
+El comando crea `dist/upse-extension.zip`. Para instalarla, descomprime ese ZIP, abre `chrome://extensions`, activa **Modo de desarrollador** y elige **Cargar descomprimida** apuntando a la carpeta descomprimida.
+
+La extensión funciona sin ejecutar `npm run dev` ni un servidor propio. Inicia sesión en `https://platzi.com` dentro del mismo perfil del navegador y abre UPSE. El acceso se realiza con las credenciales nativas del perfil al solicitar cada página; UPSE no lee, copia ni guarda cookies. El acceso a cada curso se comprueba al extraer y la extensión no afirma validar una suscripción.
+
+El flujo de extensión no solicita ni procesa pagos. Usa la herramienta con contenido y una cuenta a los que tengas derecho de acceso y respeta las condiciones de Platzi.
+
+Desde Ajustes, **Borrar datos de UPSE** elimina solamente las claves locales `platzi_session` y `platzi_settings` de esta aplicación. No borra cookies, no cierra la sesión de Platzi ni modifica el historial del navegador.
+
 UPSE es una aplicación local y experimental para obtener los subtítulos de un curso o una clase de Platzi, convertirlos a texto limpio y descargarlos para lectura, búsqueda o estudio sin conexión.
 
 La herramienta depende de la estructura HTML, las URLs de subtítulos y los controles de acceso de Platzi. No es un cliente oficial de Platzi ni un servicio alojado.
@@ -34,9 +50,9 @@ Comparación acotada a diferencias observables en el código actual:
 5. Inicia la extracción. Cada clase puede quedar como `Listo`, `Sin video` o `Error`; las clases de lectura o quiz no se tratan como video.
 6. Cuando termina, copia el texto o descarga un TXT o ZIP. Las clases con error pueden reintentarse después de corregir la causa o esperar a que Platzi deje de limitar las solicitudes.
 
-## Autenticación: cookie manual
+## Autenticación del modo web local
 
-La autenticación operativa es **manual mediante una cookie real de sesión de Platzi**:
+Cuando se ejecuta con el servidor de desarrollo, la autenticación es **manual mediante una cookie real de sesión de Platzi**:
 
 1. Abre `platzi.com` en el navegador con tu sesión iniciada.
 2. Abre DevTools (`F12`), entra en **Network** y recarga la página.

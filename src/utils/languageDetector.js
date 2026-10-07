@@ -1,5 +1,5 @@
-import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { getPlatziPage } from './platziClient';
 
 const inferLangFromUrl = (url) => {
   const lower = url.toLowerCase();
@@ -9,18 +9,8 @@ const inferLangFromUrl = (url) => {
 
 export const detectAvailableLanguages = async (videoUrl) => {
   try {
-    const parsedUrl = new URL(videoUrl);
-    const proxyUrl = `/api/platzi${parsedUrl.pathname}`;
     const sessionCookie = useAuthStore.getState().cookie;
-    
-    const headers = {
-      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
-    };
-    if (sessionCookie) {
-      headers['x-platzi-cookie'] = sessionCookie;
-    }
-
-    const res = await axios.get(proxyUrl, { headers });
+    const res = await getPlatziPage(videoUrl, sessionCookie);
     const html = res.data;
 
     // Buscamos URLs completas o hashes de archivos VTT

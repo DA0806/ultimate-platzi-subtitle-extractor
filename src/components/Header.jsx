@@ -10,7 +10,7 @@ import { useI18n } from '../i18n';
 
 const HEADER_ACTION_CLASS = 'border border-border/90 bg-card/80 text-foreground hover:border-primary/50 hover:bg-card hover:!text-foreground';
 
-export const Header = ({ onNavigateToTutorial, isAutoDetected, onRefreshSession }) => {
+export const Header = ({ onNavigateToTutorial, browserAccess, onUseBrowserSession }) => {
   const cookie = useAuthStore(state => state.cookie);
   const theme = useSettingsStore(state => state.theme);
   const toggleTheme = useSettingsStore(state => state.toggleTheme);
@@ -32,7 +32,7 @@ export const Header = ({ onNavigateToTutorial, isAutoDetected, onRefreshSession 
               <p className="truncate text-xs text-muted-foreground">{t('header.subtitle')}</p>
             </div>
             <div className="ml-3 hidden border-l border-border pl-4 sm:block">
-              <SessionBadge cookie={cookie} isAutoDetected={isAutoDetected} />
+              <SessionBadge cookie={cookie} browserAccess={browserAccess} />
             </div>
           </div>
 
@@ -59,13 +59,12 @@ export const Header = ({ onNavigateToTutorial, isAutoDetected, onRefreshSession 
               className={HEADER_ACTION_CLASS}
               ref={sessionButtonRef}
               onClick={() => setIsAuthOpen(open => !open)}
-              aria-label={isAuthOpen ? t('header.closeSessionSettings') : t('header.openSessionSettings')}
-              aria-controls="auth-panel"
+              aria-label={isAuthOpen ? t('header.closeSettings') : t('header.openSettings')}
+              aria-controls="settings-dialog"
               aria-expanded={isAuthOpen}
             >
               <Settings className="h-4 w-4 transition-transform duration-micro ease-motion hover:rotate-6" aria-hidden="true" />
             </Button>
-
           </div>
         </div>
       </header>
@@ -74,7 +73,7 @@ export const Header = ({ onNavigateToTutorial, isAutoDetected, onRefreshSession 
         onClose={handleCloseAuth}
         onOpenTutorial={onNavigateToTutorial}
         triggerRef={sessionButtonRef}
-        onRefreshSession={onRefreshSession}
+        onUseBrowserSession={onUseBrowserSession}
       />
     </>
   );
