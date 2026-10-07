@@ -45,7 +45,16 @@ test('extension subtitle requests use native browser credentials', async () => {
     return { ok: true, status: 200, statusText: 'OK', text: async () => 'WEBVTT\n\n00:00.000 --> 00:01.000\nHello' };
   };
 
-  await getVtt('https://static.platzi.com/media/subtitle/demo-es.vtt');
+  await getVtt(
+    'https://static.platzi.com/media/subtitle/demo-es.vtt',
+    'https://platzi.com/cursos/demo/',
+    null,
+    {
+      status: 'free',
+      pageUrl: 'https://platzi.com/cursos/demo/',
+      vttUrls: ['https://static.platzi.com/media/subtitle/demo-es.vtt'],
+    },
+  );
 
   assert.equal(request.options.credentials, 'include');
   assert.equal(request.url.startsWith('https://static.platzi.com/'), true);
@@ -69,6 +78,6 @@ test('ordinary pages do not activate extension mode', () => {
 
 test('extension manifest does not request cookie access', async () => {
   const manifest = JSON.parse(await readFile(new URL('../public/manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.version, '1.0.6');
+  assert.equal(manifest.version, '1.0.7');
   assert.equal(manifest.permissions?.includes('cookies') ?? false, false);
 });

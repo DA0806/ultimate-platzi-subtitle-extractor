@@ -1,5 +1,6 @@
 import { useAuthStore } from '../store/authStore';
 import { getPlatziPage } from './platziClient';
+import { assertPlatziFreeClass } from './platziAccess.js';
 
 const inferLangFromUrl = (url) => {
   const lower = url.toLowerCase();
@@ -12,12 +13,10 @@ export const detectAvailableLanguages = async (videoUrl) => {
     const sessionCookie = useAuthStore.getState().cookie;
     const res = await getPlatziPage(videoUrl, sessionCookie);
     const html = res.data;
+    const accessProof = assertPlatziFreeClass(html, videoUrl);
 
-    // Buscamos URLs completas o hashes de archivos VTT
-    const rawMatches = html.match(/(?:https?:[^\s"'{}><\\]+|[a-zA-Z0-9_-]+)\.vtt/ig) || [];
-    
     const langs = new Set();
-    rawMatches.forEach(url => {
+    accessProof.vttUrls.forEach(url => {
       const lang = inferLangFromUrl(url);
       if (lang) langs.add(lang);
     });
@@ -26,6 +25,7 @@ export const detectAvailableLanguages = async (videoUrl) => {
     return availableLangs.length > 0 ? availableLangs : ['es'];
   } catch (error) {
     console.error("Error detecting languages via HTML", error);
+    if (error?.code === 'PLATZI_ACCESS_UNVERIFIED') throw error;
     return ['es'];
   }
 };

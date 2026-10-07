@@ -27,7 +27,7 @@ export const useLanguageDetect = () => {
 
     } catch (err) {
       console.error("Error detecting languages", err);
-      setDetectedLangs(['es']);
+      setDetectedLangs(err?.code === 'PLATZI_ACCESS_UNVERIFIED' ? [] : ['es']);
     } finally {
       setIsDetecting(false);
     }

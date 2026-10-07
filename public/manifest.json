@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Ultimate Platzi Subtitle Extractor",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Extrae y descarga subtítulos de cursos y clases de Platzi.",
   "action": {
     "default_title": "Abrir Platzi Subtitle Extractor"

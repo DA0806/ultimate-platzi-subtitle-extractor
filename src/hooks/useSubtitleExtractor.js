@@ -2,6 +2,7 @@ import { useSubtitleStore } from '../store/subtitleStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useAuthStore } from '../store/authStore';
 import { getPlatziPage, getVtt } from '../utils/platziClient';
+import { assertPlatziFreeClass } from '../utils/platziAccess.js';
 import { parseVtt } from '../utils/vttParser';
 import { translate } from '../i18n';
 
@@ -21,26 +22,6 @@ const inferLangFromUrl = (url) => {
   const lower = url.toLowerCase();
   const match = lower.match(/(?:^|[-/_.])(es|en|pt|de|fr)(?:\.vtt|[-/_.?&]|$)/i);
   return match ? match[1] : null;
-};
-
-const extractVttUrls = (html) => {
-  // Buscamos URLs completas o hashes de archivos VTT (ej: 6eec75eb...-en.vtt)
-  const rawMatches = html.match(/(?:https?:[^\s"'{}><\\]+|[a-zA-Z0-9_-]+)\.vtt/ig) || [];
-  
-  const cleanedUrls = rawMatches.map(url => {
-    let clean = url
-      .replace(/\\\//g, '/')
-      .replace(/\\u0026/g, '&')
-      .replace(/\\u003d/g, '=');
-    
-    // Si no empieza con http, es un hash. Asumimos la ruta de Platzi.
-    if (!clean.startsWith('http')) {
-      clean = `https://static.platzi.com/media/subtitle/${clean}`;
-    }
-    return clean;
-  });
-  
-  return Array.from(new Set(cleanedUrls));
 };
 
 const isRetryableError = (error) => {
@@ -86,6 +67,10 @@ const createBlockedResponseError = () => {
 };
 
 const getExtractionNotice = (error) => {
+  if (error?.code === 'PLATZI_ACCESS_UNVERIFIED') {
+    return translate('extractionNotice.accessUnverified');
+  }
+
   if (error?.code === 'PLATZI_BLOCKED_PAGE') {
     return translate('extractionNotice.blocked');
   }
@@ -178,9 +163,10 @@ export const useSubtitleExtractor = () => {
             waitForRequestSlot
           );
           const html = res.data;
+          const accessProof = assertPlatziFreeClass(html, video.url);
 
-          // 2. Extraer URLs VTT, incluyendo variantes escapadas en scripts JSON
-          const uniqueVttUrls = extractVttUrls(html);
+          // 2. Solo usar las pistas vinculadas al registro del reproductor actual.
+          const uniqueVttUrls = accessProof.vttUrls || [];
 
           if (uniqueVttUrls.length === 0 && isBlockedResponse(html)) {
             throw createBlockedResponseError();
@@ -216,7 +202,7 @@ export const useSubtitleExtractor = () => {
 
                 // Descarga de VTT usando adapter unificado
                 const vttResponse = await requestWithRetry(
-                  () => getVtt(vttUrl, video.url, sessionCookie),
+                  () => getVtt(vttUrl, video.url, sessionCookie, accessProof),
                   waitForRequestSlot
                 );
                 const vttData = vttResponse.data;

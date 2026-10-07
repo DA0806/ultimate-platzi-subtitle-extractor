@@ -1,6 +1,6 @@
 # Guía preparada para la privacidad de Chrome Web Store
 
-**Producto:** UPSE 1.0.6
+**Producto:** UPSE 1.0.7
 **Fecha de preparación:** 6 de octubre de 2026  
 **Estado:** texto de apoyo para revisión; no es un formulario enviado y la extensión no se ha publicado desde este trabajo.
 
@@ -8,9 +8,9 @@ Esta guía reúne las declaraciones que corresponden al código actual. Antes de
 
 ## Single purpose
 
-**Propósito único propuesto:** permitir que una persona extraiga subtítulos de las páginas de cursos o clases de Platzi que solicita en la extensión y los descargue como TXT o ZIP para su lectura.
+**Propósito único propuesto:** permitir que una persona extraiga subtítulos de las clases que Platzi marca explícitamente como gratuitas y que solicita en la extensión, y los descargue como TXT o ZIP para su lectura.
 
-La extensión no ofrece cuentas propias, pagos, publicidad, telemetría ni un servicio de backend. No agrega funciones de historial general, automatización de navegación, evasión de controles o recuperación de cookies.
+La extensión no ofrece cuentas propias, pagos, publicidad, telemetría ni un servicio de backend. No agrega funciones de historial general, automatización de navegación, evasión de controles o recuperación de cookies. Las clases marcadas como no gratuitas o con metadata desconocida se bloquean; UPSE no valida cuentas de pago.
 
 ## Hosts y permisos
 
@@ -18,7 +18,7 @@ La extensión no ofrece cuentas propias, pagos, publicidad, telemetría ni un se
 | --- | --- |
 | `https://platzi.com/*` | Solicitar el HTML de cursos y clases que el usuario introduce o que el parser necesita para esa extracción. |
 | `https://www.platzi.com/*` | Admitir la variante `www` de las páginas de Platzi solicitadas. |
-| `https://static.platzi.com/*` | Descargar las pistas VTT que aparecen en el HTML de una clase solicitada. |
+| `https://static.platzi.com/*` | Descargar las pistas VTT listadas por el metadata del reproductor de la clase actual marcada como gratuita. |
 | `permissions: []` | La extensión no solicita `cookies`, `history`, `tabs`, almacenamiento de Chrome ni otros permisos privilegiados. |
 
 Las peticiones de extracción usan `fetch` con `credentials: include`, por lo que el navegador puede enviar a Platzi las credenciales que el propio perfil administra. UPSE no lee sus valores, no los copia a un header `Cookie` y no los transmite a un servidor de UPSE. La declaración de **Authentication information: Sí** se mantiene de forma conservadora porque la petición puede usar la sesión del perfil; no significa que UPSE lea o almacene tokens.
@@ -42,7 +42,7 @@ La tabla siguiente es la declaración preparada. Las categorías y controles def
 | Health and fitness, location, or sensitive categories | **No** | No hay funciones ni solicitudes para esas categorías. |
 | User activity and analytics | **No collection** | El estado de extracción y las preferencias son locales; no hay analytics, telemetría ni reportes de uso propios. |
 
-La clasificación conservadora de autenticación no debe describirse como validación de cuenta o suscripción. El resultado depende de las respuestas de Platzi; UPSE no realiza una autorización independiente ni evalúa flags de suscripción.
+La clasificación conservadora de autenticación no debe describirse como validación de cuenta o suscripción. El resultado depende de las respuestas de Platzi; UPSE exige `class_is_free:true` para la clase actual y bloquea valores falsos o desconocidos. No realiza una autorización independiente ni evalúa flags de suscripción.
 
 Las peticiones a Platzi, Google Fonts y Cloudinary pueden incluir metadatos ordinarios de red, como IP, navegador y URL de referencia, que cada proveedor trata conforme a sus propias políticas. UPSE no controla esos registros ni los usa para analítica propia.
 

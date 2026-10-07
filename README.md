@@ -2,7 +2,7 @@
 
 ## Extensión de Chrome
 
-La versión 1.0.6 se puede empaquetar para cargarla localmente en Chrome:
+La versión 1.0.7 se puede empaquetar para cargarla localmente en Chrome:
 
 ```bash
 npm run build:extension
@@ -10,7 +10,7 @@ npm run build:extension
 
 El comando crea `dist/upse-extension.zip`. Para instalarla, descomprime ese ZIP, abre `chrome://extensions`, activa **Modo de desarrollador** y elige **Cargar descomprimida** apuntando a la carpeta descomprimida.
 
-La extensión funciona sin ejecutar `npm run dev` ni un servidor propio. Inicia sesión en `https://platzi.com` dentro del mismo perfil del navegador y abre UPSE. El acceso se realiza con las credenciales nativas del perfil al solicitar cada página; UPSE no lee, copia ni guarda cookies. El acceso a cada curso se comprueba al extraer y la extensión no afirma validar una suscripción.
+La extensión funciona sin ejecutar `npm run dev` ni un servidor propio. Abre UPSE en el mismo perfil del navegador que usas para Platzi. Antes de buscar o descargar VTT, UPSE exige que el HTML de la clase actual incluya la metadata SSR de Platzi con `class_is_free: true` vinculada a esa clase. Las clases marcadas como no gratuitas o con metadata desconocida se bloquean; esto no valida suscripciones ni autoriza cuentas de pago. Las peticiones usan las credenciales nativas del perfil; UPSE no lee, copia ni guarda cookies.
 
 El flujo de extensión no solicita ni procesa pagos. Usa la herramienta con contenido y una cuenta a los que tengas derecho de acceso y respeta las condiciones de Platzi.
 
@@ -47,7 +47,7 @@ Comparación acotada a diferencias observables en el código actual:
 
 1. En el primer acceso, completa el setup de bienvenida, funciones y acceso. En la extensión se usa el perfil del navegador; en el modo web local la cookie manual es opcional para comenzar.
 2. Pega una URL de curso o clase de Platzi (`/cursos/...` o `/clases/...`) y pulsa **Analizar URL**.
-3. La extensión solicita el HTML directamente a Platzi con las credenciales nativas del perfil. El modo web local usa el proxy de Vite y, si se configuró, la cookie manual.
+3. La extensión solicita el HTML directamente a Platzi con las credenciales nativas del perfil y solo continúa con una clase que Platzi marque explícitamente como gratuita. El modo web local usa el proxy de Vite y, si se configuró, la cookie manual, pero conserva la misma guardia de clase gratuita.
 4. Selecciona las clases y el idioma (`es`, `en`, `pt`, `de`, `fr` o **Todos**).
 5. Inicia la extracción. Cada clase puede quedar como `Listo`, `Sin video` o `Error`; las clases de lectura o quiz no se tratan como video.
 6. Cuando termina, copia el texto o descarga un TXT o ZIP. Las clases con error pueden reintentarse después de corregir la causa o esperar a que Platzi deje de limitar las solicitudes.
@@ -65,7 +65,7 @@ La cookie se guarda localmente en el navegador mediante el store persistido `pla
 
 El login con email y contraseña **no es operativo**. No hay un flujo real de login contra Platzi; la función de credenciales que permanece en el código es una representación mock y no debe usarse para obtener una sesión válida.
 
-Sin cookie, la aplicación puede funcionar con clases públicas. Para cursos de pago o recursos protegidos, normalmente se necesita una cookie vigente con acceso a esos contenidos.
+La extensión solo procesa clases que Platzi marque explícitamente como gratuitas. Una clase de pago puede seguir siendo inaccesible para UPSE aunque el perfil tenga una sesión válida, porque esta versión no dispone de una señal autoritativa para verificar sus derechos. El modo web local conserva la cookie manual para sus solicitudes, pero aplica la misma guardia.
 
 ## Instalación y scripts
 
@@ -113,7 +113,7 @@ El parser convierte VTT a texto plano eliminando cabecera, marcas de tiempo, ide
 - **`App.jsx`**: composición de setup, tutorial, workspace, selección, extracción y exportación; las vistas de setup/tutorial se resuelven mediante el hash de la URL.
 - **Zustand**: el modo web local puede persistir una cookie manual y `settingsStore` persiste preferencias, tema y finalización del setup. La extensión no lee ni persiste cookies; conserva solo un marcador local de compatibilidad. El estado del curso y de los subtítulos vive en `subtitleStore` en memoria.
 - **Parser**: `useCourseParser` y `courseParser.js` validan la ruta, consultan el HTML y construyen la lista de clases.
-- **Extracción**: `useSubtitleExtractor` encuentra URLs `.vtt`, infiere idiomas, descarga mediante las credenciales nativas de la extensión o mediante el proxy web local, usa `vttParser` y actualiza el estado por clase.
+- **Acceso y extracción**: `platziAccess.js` valida el evento SSR `material-view/page-view` de la clase actual, exige `class_is_free: true` y bloquea metadata no verificable antes de encontrar o descargar VTT. `useSubtitleExtractor` y `languageDetector` comparten esa guardia; `getVtt` exige la prueba vinculada a la URL de la clase.
 - **Resiliencia**: las solicitudes reintentables usan hasta dos reintentos, backoff exponencial y `Retry-After` cuando está disponible; la extracción se pausa ante bloqueos, errores temporales o límites de Platzi.
 - **Exportación**: `downloader.js` usa FileSaver y JSZip; `textMerger.js` construye el TXT unificado.
 - **UI**: Tailwind CSS, tokens CSS en `src/index.css`, Lucide React y primitivas en `src/components/ui/`.

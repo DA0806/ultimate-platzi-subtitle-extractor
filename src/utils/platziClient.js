@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { assertFreeAccessProofForUrl } from './platziAccess.js';
 
 export const isExtension = () => (
   typeof globalThis.chrome !== 'undefined' &&
@@ -98,7 +99,9 @@ export const getPlatziPage = async (urlOrPath, sessionCookie = null) => {
   };
 };
 
-export const getVtt = async (vttUrl, referer = null, sessionCookie = null) => {
+export const getVtt = async (vttUrl, referer = null, sessionCookie = null, accessProof = null) => {
+  assertFreeAccessProofForUrl(accessProof, referer, vttUrl);
+
   if (isExtension()) {
     if (!isAllowedVttUrl(vttUrl)) {
       throw new Error('La URL de subtítulos debe pertenecer a https://static.platzi.com');

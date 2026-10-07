@@ -1,10 +1,10 @@
 # Política de privacidad de UPSE
 
 **Fecha de vigencia:** 6 de octubre de 2026  
-**Producto:** Ultimate Platzi Subtitle Extractor (UPSE) 1.0.6, extensión local para navegadores Chromium
+**Producto:** Ultimate Platzi Subtitle Extractor (UPSE) 1.0.7, extensión local para navegadores Chromium
 **Contacto:** <https://github.com/DA0806/ultimate-platzi-subtitle-extractor/issues>
 
-Esta política describe el comportamiento de la extensión UPSE 1.0.6. Es una declaración del flujo implementado en este repositorio y no constituye asesoría legal ni una garantía de aprobación de Chrome Web Store.
+Esta política describe el comportamiento de la extensión UPSE 1.0.7. Es una declaración del flujo implementado en este repositorio y no constituye asesoría legal ni una garantía de aprobación de Chrome Web Store.
 
 ## Alcance
 
@@ -16,7 +16,8 @@ Cuando el usuario introduce una URL de curso o clase, la extensión procesa en m
 
 - la URL solicitada;
 - el HTML que Platzi devuelve para esa URL;
-- las URLs VTT de subtítulos encontradas en ese HTML;
+- la metadata SSR de la clase (`class_id`, `class_position`, `course_id`, `class_name` y `class_is_free`) para confirmar que la página actual está marcada como gratuita;
+- las URLs VTT de subtítulos que Platzi entrega en el metadata del reproductor de la clase actual;
 - el contenido VTT descargado desde `static.platzi.com`;
 - el texto limpio, la selección de clases, estados de extracción y datos necesarios para crear TXT o ZIP.
 
@@ -34,7 +35,7 @@ La extensión conserva preferencias propias, tema, idioma y el estado de finaliz
 | Preferencias | Tema, idioma y setup | Recordar la configuración de la extensión | Almacenamiento local de la extensión |
 | Archivos exportados | TXT o ZIP elegidos por el usuario | Entregar el resultado solicitado | Creación y descarga local; no se envían a UPSE |
 
-UPSE no solicita pagos, no vende datos, no tiene cuentas propias, no tiene telemetría ni analytics propios y no mantiene un backend para almacenar contenido o credenciales. No se implementa login contra Platzi con correo y contraseña.
+UPSE solo busca o descarga VTT cuando la clase actual está marcada explícitamente como gratuita por Platzi. Una clase marcada como no gratuita o con metadata desconocida se bloquea antes de solicitar VTT. UPSE no solicita pagos, no vende datos, no tiene cuentas propias, no tiene telemetría ni analytics propios y no mantiene un backend para almacenar contenido o credenciales. No se implementa login contra Platzi con correo y contraseña; una sesión de pago no se valida desde UPSE.
 
 ## Recursos de terceros
 
@@ -52,7 +53,7 @@ La extensión no descarga JavaScript remoto, no ejecuta código remoto y no usa 
 
 ## Seguridad y uso autorizado
 
-El usuario debe mantener su navegador y su cuenta protegidos, usar la extensión solo con contenido al que tenga derecho de acceso y respetar los términos de Platzi, los derechos de autor y las medidas de seguridad del sitio. UPSE no intenta evadir MFA, DRM, paywalls, límites de solicitudes ni controles de autorización. Un error `401` o `403` se muestra como resultado de Platzi y no se transforma en una validación de suscripción.
+El usuario debe mantener su navegador y su cuenta protegidos, usar la extensión solo con contenido al que tenga derecho de acceso y respetar los términos de Platzi, los derechos de autor y las medidas de seguridad del sitio. UPSE no intenta evadir MFA, DRM, paywalls, límites de solicitudes ni controles de autorización. Un error `401` o `403` se muestra como resultado de Platzi y no se transforma en una validación de suscripción. La guardia de clase gratuita no certifica derechos de exportación ni el acceso de una cuenta de pago.
 
 ## Compromiso con las políticas de Chrome Web Store
 
