@@ -1,10 +1,10 @@
 # Política de privacidad de UPSE
 
 **Fecha de vigencia:** 6 de octubre de 2026  
-**Producto:** Ultimate Platzi Subtitle Extractor (UPSE), extensión local para navegadores Chromium  
+**Producto:** Ultimate Platzi Subtitle Extractor (UPSE) 1.0.6, extensión local para navegadores Chromium
 **Contacto:** <https://github.com/DA0806/ultimate-platzi-subtitle-extractor/issues>
 
-Esta política describe el comportamiento de la extensión UPSE 1.0.5. Es una declaración del flujo implementado en este repositorio y no constituye asesoría legal ni una garantía de aprobación de Chrome Web Store.
+Esta política describe el comportamiento de la extensión UPSE 1.0.6. Es una declaración del flujo implementado en este repositorio y no constituye asesoría legal ni una garantía de aprobación de Chrome Web Store.
 
 ## Alcance
 

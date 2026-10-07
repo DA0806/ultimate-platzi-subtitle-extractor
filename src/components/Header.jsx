@@ -1,19 +1,15 @@
 import { useCallback, useRef, useState } from 'react';
-import { FileText, Moon, Settings, Sun } from 'lucide-react';
+import { FileText, Settings } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useSettingsStore } from '../store/settingsStore';
 import { Button } from './ui/Button';
 import { SessionBadge } from './SessionBadge';
 import { AuthPanel } from './AuthPanel';
-import { InterfaceLanguageSelect } from './InterfaceLanguageSelect';
 import { useI18n } from '../i18n';
 
 const HEADER_ACTION_CLASS = 'border border-border/90 bg-card/80 text-foreground hover:border-primary/50 hover:bg-card hover:!text-foreground';
 
 export const Header = ({ onNavigateToTutorial, browserAccess, onUseBrowserSession }) => {
   const cookie = useAuthStore(state => state.cookie);
-  const theme = useSettingsStore(state => state.theme);
-  const toggleTheme = useSettingsStore(state => state.toggleTheme);
   const { t } = useI18n();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const sessionButtonRef = useRef(null);
@@ -37,21 +33,6 @@ export const Header = ({ onNavigateToTutorial, browserAccess, onUseBrowserSessio
           </div>
 
           <div className="flex items-center gap-2">
-            <InterfaceLanguageSelect />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={HEADER_ACTION_CLASS}
-              onClick={toggleTheme}
-              aria-label={t('header.changeTheme')}
-            >
-              {theme === 'dark' ? (
-                <Sun key="sun" className="h-4 w-4 animate-theme-icon" aria-hidden="true" />
-              ) : (
-                <Moon key="moon" className="h-4 w-4 animate-theme-icon" aria-hidden="true" />
-              )}
-            </Button>
             <Button
               type="button"
               variant="ghost"

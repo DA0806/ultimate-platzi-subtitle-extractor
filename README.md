@@ -2,7 +2,7 @@
 
 ## Extensión de Chrome
 
-La versión 1.0.5 se puede empaquetar para cargarla localmente en Chrome:
+La versión 1.0.6 se puede empaquetar para cargarla localmente en Chrome:
 
 ```bash
 npm run build:extension

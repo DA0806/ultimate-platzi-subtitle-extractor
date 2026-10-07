@@ -1,6 +1,6 @@
 # Guía preparada para la privacidad de Chrome Web Store
 
-**Producto:** UPSE 1.0.5  
+**Producto:** UPSE 1.0.6
 **Fecha de preparación:** 6 de octubre de 2026  
 **Estado:** texto de apoyo para revisión; no es un formulario enviado y la extensión no se ha publicado desde este trabajo.
 
@@ -42,7 +42,7 @@ La tabla siguiente es la declaración preparada. Las categorías y controles def
 | Health and fitness, location, or sensitive categories | **No** | No hay funciones ni solicitudes para esas categorías. |
 | User activity and analytics | **No collection** | El estado de extracción y las preferencias son locales; no hay analytics, telemetría ni reportes de uso propios. |
 
-La clasificación conservadora de autenticación no debe describirse como validación de cuenta o suscripción. Platzi decide si autoriza cada respuesta.
+La clasificación conservadora de autenticación no debe describirse como validación de cuenta o suscripción. El resultado depende de las respuestas de Platzi; UPSE no realiza una autorización independiente ni evalúa flags de suscripción.
 
 Las peticiones a Platzi, Google Fonts y Cloudinary pueden incluir metadatos ordinarios de red, como IP, navegador y URL de referencia, que cada proveedor trata conforme a sus propias políticas. UPSE no controla esos registros ni los usa para analítica propia.
 

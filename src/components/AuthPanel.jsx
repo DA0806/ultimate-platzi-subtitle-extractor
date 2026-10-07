@@ -174,7 +174,7 @@ export const AuthPanel = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 p-3 backdrop-blur-[2px] animate-fade-in sm:p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-black/60 p-3 backdrop-blur-[2px] animate-fade-in sm:p-4"
       onClick={event => event.target === event.currentTarget && onClose?.()}
     >
       <section

@@ -1,4 +1,4 @@
-# Guía de la extensión UPSE 1.0.5
+# Guía de la extensión UPSE 1.0.6
 
 Esta guía describe la extensión Manifest V3 de Ultimate Platzi Subtitle Extractor (UPSE), su instalación local y sus dos modos de acceso. La entrega está preparada para revisión; todavía no significa que la extensión haya sido publicada o aprobada por Chrome Web Store.
 
@@ -6,7 +6,7 @@ Esta guía describe la extensión Manifest V3 de Ultimate Platzi Subtitle Extrac
 
 UPSE abre un espacio de trabajo en una pestaña del navegador. Recibe una URL de curso o clase de Platzi, solicita el HTML y las pistas VTT, permite seleccionar clases e idiomas y genera archivos TXT o ZIP localmente.
 
-La extensión 1.0.5 usa el flujo introducido en 1.0.4: las peticiones a `https://platzi.com` y `https://static.platzi.com` usan las credenciales nativas del perfil mediante `fetch` con `credentials: include`. La extensión no usa `chrome.cookies`, no copia encabezados Cookie, no guarda valores de cookies y no tiene un servidor propio. El acceso a un curso se comprueba cuando Platzi responde a la solicitud; el indicador de la interfaz no valida identidad, suscripción ni autorización premium.
+La extensión 1.0.6 conserva el flujo introducido en 1.0.4: las peticiones a `https://platzi.com` y `https://static.platzi.com` usan las credenciales nativas del perfil mediante `fetch` con `credentials: include`. La extensión no usa `chrome.cookies`, no copia encabezados Cookie, no guarda valores de cookies y no tiene un servidor propio. La extracción depende de las respuestas de Platzi; UPSE no evalúa flags de suscripción ni distingue previews de clases protegidas. Un HTML o VTT accesible no valida derechos de acceso o exportación.
 
 El modo web local conserva un flujo separado para desarrollo: Vite puede recibir una cookie introducida manualmente y reenviarla a través de sus proxies locales. Ese flujo no describe el comportamiento de la extensión empaquetada.
 
@@ -59,7 +59,7 @@ La extensión procesa URLs, HTML y VTT para extraer subtítulos, y mantiene pref
 ## Evidencia y límites de validación
 
 - Se recibió una comprobación manual del usuario en Edge: con su sesión iniciada, la extensión instalada pudo extraer correctamente un curso real de Platzi.
-- También se recibió una comprobación manual en Chrome sin sesión con contenido público: se observaron las primeras dos clases de un curso público de GitHub y la primera transcripción pública. Eso no demuestra acceso a las 42 clases, no demuestra bypass de controles y no demuestra autorización para contenido premium.
+- También se recibió una comprobación manual en Chrome sin sesión con contenido público: se reportó extracción de hasta 12 clases en dos cursos públicos de GitHub y una primera transcripción pública. Eso no demuestra acceso al curso completo, no demuestra bypass de controles y no demuestra autorización para contenido premium.
 - Las pruebas automatizadas locales cubren el modo nativo sin la API `chrome.cookies`, las credenciales `include`, los límites de URL, la migración de almacenamiento heredado, el manifest, lint y el build del ZIP.
-- La comprobación automatizada del paquete cargó el service worker y la interfaz en un perfil temporal de Edge, sin errores propios; Chrome 154 está instalado, pero su canal automatizado no expuso la extensión aunque conservó los flags de carga. Las comprobaciones manuales de extracción del usuario corresponden a entregas anteriores y no prueban esta versión 1.0.5 en Chrome.
+- La comprobación automatizada del paquete cargó el service worker y la interfaz en un perfil temporal de Edge, sin errores propios; Chrome 154 está instalado, pero su canal automatizado no expuso la extensión aunque conservó los flags de carga. Las comprobaciones manuales de extracción del usuario corresponden a entregas anteriores y no prueban esta versión 1.0.6 en Chrome.
 - Sigue pendiente una prueba automatizada autenticada en un perfil limpio con una cuenta autorizada. No se copian credenciales del perfil del usuario para realizarla.

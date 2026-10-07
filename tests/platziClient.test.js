@@ -69,6 +69,6 @@ test('ordinary pages do not activate extension mode', () => {
 
 test('extension manifest does not request cookie access', async () => {
   const manifest = JSON.parse(await readFile(new URL('../public/manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.version, '1.0.5');
+  assert.equal(manifest.version, '1.0.6');
   assert.equal(manifest.permissions?.includes('cookies') ?? false, false);
 });
