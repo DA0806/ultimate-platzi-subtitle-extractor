@@ -255,9 +255,87 @@ export const inspectClassIdentityDocument = (document, pageUrl) => {
   };
 };
 
+export const parseHtmlToDocument = (html) => {
+  if (typeof globalThis.DOMParser === 'function') {
+    return new globalThis.DOMParser().parseFromString(html, 'text/html');
+  }
+  return null;
+};
+
 export const inspectClassIdentity = (html, pageUrl) => {
-  if (typeof html !== 'string' || typeof DOMParser !== 'function') return null;
-  return inspectClassIdentityDocument(new DOMParser().parseFromString(html, 'text/html'), pageUrl);
+  if (typeof html !== 'string') return null;
+  const doc = parseHtmlToDocument(html);
+  if (!doc) return null;
+  return inspectClassIdentityDocument(doc, pageUrl);
+};
+
+export const resolvePublicClassIdentity = async (classUrl) => {
+  if (!isClassPagePath(classUrl)) {
+    return { status: 'denied', reason: 'INVALID_CLASS_URL' };
+  }
+  const canonicalUrl = normalizePageUrl(classUrl);
+  if (!canonicalUrl) {
+    return { status: 'denied', reason: 'INVALID_CLASS_URL' };
+  }
+
+  let response;
+  try {
+    response = await fetch(canonicalUrl, {
+      method: 'GET',
+      credentials: 'omit',
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+      },
+    });
+  } catch {
+    return { status: 'unknown', reason: 'NETWORK_ERROR' };
+  }
+
+  if (!response || !response.ok || response.status !== 200) {
+    return { status: 'unknown', reason: `HTTP_${response?.status || 'UNKNOWN'}` };
+  }
+
+  if (response.url) {
+    const finalCanonical = normalizePageUrl(response.url);
+    if (!finalCanonical || finalCanonical !== canonicalUrl) {
+      return { status: 'denied', reason: 'CANONICAL_MISMATCH' };
+    }
+  }
+
+  let html;
+  try {
+    html = await response.text();
+  } catch {
+    return { status: 'unknown', reason: 'READ_HTML_FAILED' };
+  }
+
+  const doc = parseHtmlToDocument(html);
+  if (!doc) {
+    return { status: 'unknown', reason: typeof globalThis.DOMParser === 'function' ? 'PARSE_DOCUMENT_FAILED' : 'DOMPARSER_UNAVAILABLE' };
+  }
+
+  const identity = inspectClassIdentityDocument(doc, canonicalUrl);
+  if (!identity || !Number.isInteger(identity.courseId) || identity.courseId <= 0 || !Number.isInteger(identity.classId) || identity.classId <= 0) {
+    return { status: 'denied', reason: 'UNKNOWN_CLASS_IDENTITY' };
+  }
+
+  if (identity.canonicalUrl !== canonicalUrl) {
+    return { status: 'denied', reason: 'CANONICAL_MISMATCH' };
+  }
+
+  return {
+    status: 'verified',
+    source: 'public_catalog',
+    identity: {
+      courseId: identity.courseId,
+      courseSlug: identity.courseSlug,
+      classId: identity.classId,
+      classSlug: identity.classSlug,
+      canonicalUrl: identity.canonicalUrl,
+      title: identity.title,
+    },
+  };
 };
 
 export const evaluateClassCapabilities = (identity) => {
@@ -320,6 +398,17 @@ export const extractProtectedMaterial = (document, identity, capabilityDecision,
     throw error;
   }
 
+  const decisionRevision = capabilityDecision.classRevision;
+  if (!Number.isInteger(decisionRevision) || decisionRevision < 0 || decisionRevision !== getClassRevision(
+    capabilityDecision.accountId,
+    capabilityDecision.sessionEpoch,
+    identity.canonicalUrl,
+  )) {
+    const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
+    error.code = 'PROOF_REVOKED';
+    throw error;
+  }
+
   const payloads = [];
   for (const script of document.querySelectorAll('script')) {
     payloads.push(...parseNextFlightPushes(script.textContent || ''));
@@ -329,6 +418,17 @@ export const extractProtectedMaterial = (document, identity, capabilityDecision,
   const ttlMs = Math.min(Math.max(Number(options.ttlMs) || 600_000, 1), 600_000);
   const randomSuffix = Math.random().toString(36).slice(2);
   const proofId = options.proofId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `proof-${now}-${randomSuffix}`);
+
+  if (options.classRevision !== undefined && options.classRevision !== decisionRevision) {
+    const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
+    error.code = 'PROOF_REVOKED';
+    throw error;
+  }
+  if (decisionRevision !== getClassRevision(capabilityDecision.accountId, capabilityDecision.sessionEpoch, identity.canonicalUrl)) {
+    const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
+    error.code = 'PROOF_REVOKED';
+    throw error;
+  }
 
   return {
     proofId,
@@ -342,6 +442,7 @@ export const extractProtectedMaterial = (document, identity, capabilityDecision,
     sessionFingerprint: options.sessionFingerprint || `verified-${capabilityDecision.accountId}`,
     sessionAccount: options.sessionAccount ?? capabilityDecision.accountId,
     sessionEpoch: options.sessionEpoch ?? capabilityDecision.sessionEpoch,
+    classRevision: decisionRevision,
     status: identity.isFreePublic ? ACCESS_STATUS.FREE : ACCESS_STATUS.NOT_FREE,
     capabilities: capabilityDecision,
     vttUrls,
@@ -353,16 +454,104 @@ export const extractProtectedMaterial = (document, identity, capabilityDecision,
   };
 };
 
-export const assertAuthorizedExportProof = (proof, targetVttUrl, options = {}) => {
+const classRevisionMap = new Map();
+// shortcut: revisions remain for this process lifetime, clear with a real session lifecycle before unbounded long-lived hosts.
+
+export const makeClassRevisionKey = (account, epoch, canonicalUrl) => {
+  const normUrl = normalizePageUrl(canonicalUrl) || canonicalUrl || 'unknown';
+  return `${account || 'anon'}:${epoch ?? 0}:${normUrl}`;
+};
+
+export const getClassRevision = (account, epoch, canonicalUrl) => {
+  const key = makeClassRevisionKey(account, epoch, canonicalUrl);
+  return classRevisionMap.get(key)?.revision ?? 0;
+};
+
+export const bumpClassRevision = (account, epoch, canonicalUrl, reason = 'denied') => {
+  const now = Date.now();
+  const key = makeClassRevisionKey(account, epoch, canonicalUrl);
+  const current = classRevisionMap.get(key);
+  const nextRevision = (current?.revision ?? 0) + 1;
+  classRevisionMap.set(key, {
+    revision: nextRevision,
+    status: reason,
+    updatedAt: now,
+  });
+  return nextRevision;
+};
+
+export const isClassRevisionDenied = (account, epoch, canonicalUrl, revision) => {
+  const current = getClassRevision(account, epoch, canonicalUrl);
+  return !Number.isInteger(revision) || revision !== current;
+};
+
+const revokedProofEntries = new Map();
+
+const pruneRevokedProofEntries = (now) => {
+  for (const [id, expiresAt] of revokedProofEntries.entries()) {
+    if (expiresAt <= now) {
+      revokedProofEntries.delete(id);
+    }
+  }
+};
+
+export const revokeProof = (proofId, ttlMs = 600_000) => {
+  if (proofId) {
+    const now = Date.now();
+    pruneRevokedProofEntries(now);
+    revokedProofEntries.set(proofId, now + ttlMs);
+  }
+};
+
+export const isProofRevoked = (proofId) => {
+  if (!proofId) return false;
+  const now = Date.now();
+  pruneRevokedProofEntries(now);
+  return revokedProofEntries.has(proofId);
+};
+
+export const assertAuthorizedExportProof = (proof, targetVttUrl = null, options = {}) => {
   if (!proof || typeof proof !== 'object') {
     const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
     error.code = 'PLATZI_ACCESS_UNVERIFIED';
     throw error;
   }
 
-  if (proof.capabilities?.verified !== true || !proof.sessionAccount || !Number.isInteger(proof.sessionEpoch)) {
+  if (isProofRevoked(proof.proofId)) {
+    const error = new Error('La prueba de autorización de esta clase fue revocada');
+    error.code = 'PROOF_REVOKED';
+    throw error;
+  }
+
+  const caps = proof.capabilities;
+  const hasIntactCapabilities = Boolean(
+    caps &&
+    caps.verified === true &&
+    caps.authenticated === true &&
+    caps.canView === true &&
+    caps.canExportSubtitles === true &&
+    caps.canExport === true &&
+    caps.accountId === proof.sessionAccount &&
+    caps.sessionEpoch === proof.sessionEpoch &&
+    caps.courseId === proof.courseId &&
+    caps.classId === proof.classId &&
+    caps.canonicalUrl === proof.canonicalUrl &&
+    Number.isFinite(caps.expiresAt) &&
+    caps.expiresAt >= proof.expiresAt &&
+    Boolean(proof.sessionAccount) &&
+    Number.isInteger(proof.sessionEpoch)
+  );
+
+  if (!hasIntactCapabilities) {
     const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
     error.code = 'PLATZI_ACCESS_UNVERIFIED';
+    throw error;
+  }
+
+  const currentRevision = getClassRevision(proof.sessionAccount, proof.sessionEpoch, proof.canonicalUrl);
+  if (!Number.isInteger(proof.classRevision) || proof.classRevision !== currentRevision) {
+    const error = new Error('La prueba de autorización de esta clase pertenece a una revisión anterior revocada');
+    error.code = 'PROOF_REVOKED';
     throw error;
   }
 
@@ -400,18 +589,20 @@ export const assertAuthorizedExportProof = (proof, targetVttUrl, options = {}) =
     throw error;
   }
 
-  const normTarget = normalizeVttUrl(targetVttUrl);
-  if (!normTarget) {
-    const error = new Error('URL de subtítulo inválida o no permitida');
-    error.code = 'INVALID_VTT_URL';
-    throw error;
-  }
+  if (targetVttUrl !== null && targetVttUrl !== undefined) {
+    const normTarget = normalizeVttUrl(targetVttUrl);
+    if (!normTarget) {
+      const error = new Error('URL de subtítulo inválida o no permitida');
+      error.code = 'INVALID_VTT_URL';
+      throw error;
+    }
 
-  const allowedUrls = proof.authorizedVttUrls || proof.vttUrls || [];
-  if (!allowedUrls.includes(normTarget)) {
-    const error = new Error('La URL de subtítulo no coincide con las pistas autorizadas para esta clase');
-    error.code = 'UNAUTHORIZED_VTT_TRACK';
-    throw error;
+    const allowedUrls = proof.authorizedVttUrls || proof.vttUrls || [];
+    if (!allowedUrls.includes(normTarget)) {
+      const error = new Error('La URL de subtítulo no coincide con las pistas autorizadas para esta clase');
+      error.code = 'UNAUTHORIZED_VTT_TRACK';
+      throw error;
+    }
   }
 
   return proof;

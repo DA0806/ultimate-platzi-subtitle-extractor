@@ -5,7 +5,9 @@ test('downloadZip revalidates after deferred generation and never saves revoked 
   const fileSaver = (await import('file-saver')).default;
   const JSZip = (await import('jszip')).default;
   const { useAuthStore } = await import('../src/store/authStore.js');
+  const { useSubtitleStore } = await import('../src/store/subtitleStore.js');
   const { defaultAuthorizationService } = await import('../src/utils/authorizationService.js');
+  const { getClassRevision } = await import('../src/utils/platziAccess.js');
   const { downloadZip } = await import(`../src/utils/downloader.js?zip-gate-${Date.now()}`);
 
   const originalSaveAs = fileSaver.saveAs;
@@ -42,23 +44,40 @@ test('downloadZip revalidates after deferred generation and never saves revoked 
   };
 
   try {
-    await assert.rejects(
-      downloadZip([{
-        status: 'no-video',
-        slug: 'clase',
-        title: 'Clase',
-        authorizationProof: {
-          identity,
-          classId: identity.classId,
-          courseId: identity.courseId,
-          canonicalUrl: identity.canonicalUrl,
-          sessionAccount: 'account-a',
+    const video = {
+      id: 'video-1',
+      url: identity.canonicalUrl,
+      status: 'no-video',
+      slug: 'clase',
+      title: 'Clase',
+      authorizationProof: {
+        identity,
+        classId: identity.classId,
+        courseId: identity.courseId,
+        canonicalUrl: identity.canonicalUrl,
+        sessionAccount: 'account-a',
+        sessionEpoch: 0,
+        classRevision: getClassRevision('account-a', 0, identity.canonicalUrl),
+        expiresAt: Date.now() + 60_000,
+        capabilities: {
+          verified: true,
+          authenticated: true,
+          canView: true,
+          canExport: true,
+          canExportSubtitles: true,
+          accountId: 'account-a',
           sessionEpoch: 0,
+          courseId: identity.courseId,
+          classId: identity.classId,
+          canonicalUrl: identity.canonicalUrl,
           expiresAt: Date.now() + 60_000,
-          capabilities: { verified: true },
-          authorizedVttUrls: [],
         },
-      }], 'es', 'curso'),
+        authorizedVttUrls: [],
+      },
+    };
+    useSubtitleStore.setState({ videos: [video] });
+    await assert.rejects(
+      downloadZip([video], 'es', 'curso'),
       error => error.code === 'SESSION_INVALIDATED_CANNOT_EXPORT',
     );
     assert.equal(saves, 0);

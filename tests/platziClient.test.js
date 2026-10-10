@@ -8,15 +8,21 @@ import {
   isAllowedVttUrl,
   isExtension,
 } from '../src/utils/platziClient.js';
+import { getClassRevision } from '../src/utils/platziAccess.js';
+import { bumpClassRevision } from '../src/utils/platziAccess.js';
+import { useAuthStore } from '../src/store/authStore.js';
+import { defaultAuthorizationService } from '../src/utils/authorizationService.js';
 
 const originalChrome = globalThis.chrome;
 const originalLocation = globalThis.location;
 const originalFetch = globalThis.fetch;
+const originalAdapter = defaultAuthorizationService.adapter;
 
 afterEach(() => {
   globalThis.chrome = originalChrome;
   globalThis.location = originalLocation;
   globalThis.fetch = originalFetch;
+  defaultAuthorizationService.adapter = originalAdapter;
 });
 
 test('extension mode does not require the cookies API', async () => {
@@ -40,8 +46,10 @@ test('class gateway denies unknown identity before the first protected HTTP requ
   globalThis.location = { protocol: 'chrome-extension:' };
   globalThis.chrome = { runtime: { id: 'test-extension' } };
   let requests = 0;
-  globalThis.fetch = async () => {
-    requests += 1;
+  globalThis.fetch = async (url) => {
+    if (!url || !String(url).includes('/components/header/')) {
+      requests += 1;
+    }
     return { ok: true, status: 200, statusText: 'OK', text: async () => '<html />' };
   };
 
@@ -109,7 +117,9 @@ test('extension manifest does not request cookie access', async () => {
   assert.equal(manifest.permissions?.includes('cookies') ?? false, false);
 });
 
-test('getPlatziPage standardizes 401 and 403 errors as PLATZI_SESSION_INVALIDATED', async () => {
+test('getPlatziPage standardizes 401 and 403 as resource errors and preserves session identity', async () => {
+  const { useAuthStore } = await import('../src/store/authStore.js');
+  useAuthStore.setState({ sessionStatus: 'authenticated', sessionEpoch: 10 });
   globalThis.location = { protocol: 'chrome-extension:' };
   globalThis.chrome = { runtime: { id: 'test-extension' } };
 
@@ -123,8 +133,10 @@ test('getPlatziPage standardizes 401 and 403 errors as PLATZI_SESSION_INVALIDATE
 
   await assert.rejects(
     getPlatziPage('https://platzi.com/cursos/javascript/'),
-    error => error.code === 'PLATZI_SESSION_INVALIDATED' && error.status === 401,
+    error => error.code === 'PLATZI_UNAUTHORIZED' && error.status === 401,
   );
+  assert.equal(useAuthStore.getState().sessionStatus, 'authenticated', 'generic 401 must NOT invalidate session');
+  assert.equal(useAuthStore.getState().sessionEpoch, 10, 'generic 401 must NOT increment sessionEpoch');
 
   globalThis.fetch = async () => ({
     ok: false,
@@ -136,8 +148,10 @@ test('getPlatziPage standardizes 401 and 403 errors as PLATZI_SESSION_INVALIDATE
 
   await assert.rejects(
     getPlatziPage('https://platzi.com/cursos/javascript/'),
-    error => error.code === 'PLATZI_SESSION_INVALIDATED' && error.status === 403,
+    error => error.code === 'PLATZI_FORBIDDEN' && error.status === 403,
   );
+  assert.equal(useAuthStore.getState().sessionStatus, 'authenticated', 'generic 403 must NOT invalidate session');
+  assert.equal(useAuthStore.getState().sessionEpoch, 10, 'generic 403 must NOT increment sessionEpoch');
 });
 
 test('getPlatziPage standardizes 429 errors as PLATZI_RATE_LIMITED with retryAfter', async () => {
@@ -161,9 +175,11 @@ test('getPlatziPage standardizes 429 errors as PLATZI_RATE_LIMITED with retryAft
   );
 });
 
-test('extension gateway rejects a login redirect as session invalidation', async () => {
+test('extension gateway rejects a login redirect as resource unauthorized without invalidating session', async () => {
   globalThis.location = { protocol: 'chrome-extension:' };
   globalThis.chrome = { runtime: { id: 'test-extension' } };
+  const { useAuthStore } = await import('../src/store/authStore.js');
+  useAuthStore.setState({ sessionStatus: 'authenticated', sessionEpoch: 10 });
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
@@ -174,8 +190,10 @@ test('extension gateway rejects a login redirect as session invalidation', async
 
   await assert.rejects(
     getPlatziPage('https://platzi.com/cursos/demo/'),
-    error => error.code === 'PLATZI_SESSION_INVALIDATED' && error.status === 401,
+    error => error.code === 'PLATZI_UNAUTHORIZED' && error.status === 401,
   );
+  assert.equal(useAuthStore.getState().sessionStatus, 'authenticated', 'login redirect must NOT invalidate session');
+  assert.equal(useAuthStore.getState().sessionEpoch, 10, 'login redirect must NOT increment sessionEpoch');
 });
 
 test('getVtt rejects when proof sessionEpoch does not match current session epoch', async () => {
@@ -185,11 +203,27 @@ test('getVtt rejects when proof sessionEpoch does not match current session epoc
   const proof = {
     status: 'free',
     pageUrl: 'https://platzi.com/cursos/demo/',
+    canonicalUrl: 'https://platzi.com/cursos/demo/',
+    courseId: 1,
+    classId: 2,
     authorizedVttUrls: ['https://static.platzi.com/media/subtitle/demo-es.vtt'],
     sessionEpoch: 0,
     expiresAt: Date.now() + 600_000,
     sessionAccount: 'account-a',
-    capabilities: { verified: true },
+    classRevision: getClassRevision('account-a', 0, 'https://platzi.com/cursos/demo/'),
+    capabilities: {
+      verified: true,
+      authenticated: true,
+      canView: true,
+      canExport: true,
+      canExportSubtitles: true,
+      accountId: 'account-a',
+      sessionEpoch: 0,
+      courseId: 1,
+      classId: 2,
+      canonicalUrl: 'https://platzi.com/cursos/demo/',
+      expiresAt: Date.now() + 600_000,
+    },
   };
 
   const { useAuthStore } = await import('../src/store/authStore.js');
@@ -199,4 +233,64 @@ test('getVtt rejects when proof sessionEpoch does not match current session epoc
     getVtt('https://static.platzi.com/media/subtitle/demo-es.vtt', 'https://platzi.com/cursos/demo/', null, proof),
     error => error.code === 'PLATZI_SESSION_INVALIDATED',
   );
+});
+
+test('getVtt drops delayed body content after class revocation', async () => {
+  globalThis.location = { protocol: 'chrome-extension:' };
+  globalThis.chrome = { runtime: { id: 'test-extension' } };
+  const identity = {
+    courseId: 701,
+    classId: 702,
+    canonicalUrl: 'https://platzi.com/cursos/race/delayed-vtt/',
+  };
+  const account = 'delayed-vtt-account';
+  const epoch = 70;
+  useAuthStore.setState({ sessionStatus: 'authenticated', sessionEpoch: epoch });
+  defaultAuthorizationService.adapter = {
+    async checkSession() {
+      return { status: 'verified', authenticated: true, accountId: account, sessionEpoch: epoch, expiresAt: Date.now() + 60_000 };
+    },
+    async checkClassAccess() {
+      return { status: 'verified', canView: true, accountId: account, sessionEpoch: epoch, expiresAt: Date.now() + 60_000, ...identity };
+    },
+    async checkExportPermission() {
+      return { status: 'verified', canExport: true, accountId: account, sessionEpoch: epoch, expiresAt: Date.now() + 60_000, ...identity };
+    },
+  };
+  const vttUrl = 'https://static.platzi.com/media/subtitle/delayed-vtt-es.vtt';
+  const classRevision = getClassRevision(account, epoch, identity.canonicalUrl);
+  const proof = {
+    ...identity,
+    proofId: 'delayed-vtt-proof',
+    sessionAccount: account,
+    sessionEpoch: epoch,
+    classRevision,
+    authorizedVttUrls: [vttUrl],
+    expiresAt: Date.now() + 60_000,
+    capabilities: {
+      verified: true,
+      authenticated: true,
+      canView: true,
+      canExport: true,
+      canExportSubtitles: true,
+      accountId: account,
+      sessionEpoch: epoch,
+      ...identity,
+      expiresAt: Date.now() + 60_000,
+    },
+  };
+  let resolveBody;
+  const body = new Promise(resolve => { resolveBody = resolve; });
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    text: async () => body,
+  });
+
+  const request = getVtt(vttUrl, null, null, proof);
+  bumpClassRevision(account, epoch, identity.canonicalUrl);
+  resolveBody('WEBVTT\n\n00:00.000 --> 00:01.000\nsecret');
+
+  await assert.rejects(request, error => error.code === 'PROOF_REVOKED');
 });

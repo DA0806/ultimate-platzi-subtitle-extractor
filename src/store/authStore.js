@@ -4,8 +4,9 @@ import { useSubtitleStore } from './subtitleStore.js';
 const LEGACY_SESSION_KEY = 'platzi_session';
 
 const safeExtensionUser = (user) => user && ({
-  name: user.name,
-  email: user.email,
+  plan: typeof user.plan === 'string' ? user.plan : undefined,
+  userType: typeof user.userType === 'string' ? user.userType : undefined,
+  isB2B: typeof user.isB2B === 'boolean' ? user.isB2B : undefined,
   isBrowserAccess: Boolean(user.isBrowserAccess),
 });
 
@@ -54,5 +55,6 @@ export const useAuthStore = create((set) => ({
     useSubtitleStore.getState().purgeExtractedContent();
   },
 
-  updateUser: (user) => set((state) => ({ user: { ...state.user, ...safeExtensionUser(user) } })),
+  setUser: (user) => set({ user: user ? safeExtensionUser(user) : null }),
+  updateUser: (user) => set((state) => ({ user: user ? { ...state.user, ...safeExtensionUser(user) } : null })),
 }));

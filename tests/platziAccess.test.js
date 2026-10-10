@@ -8,6 +8,7 @@ import {
   evaluateClassCapabilities,
   extractProtectedMaterial,
   assertAuthorizedExportProof,
+  getClassRevision,
 } from '../src/utils/platziAccess.js';
 import { getVtt } from '../src/utils/platziClient.js';
 
@@ -296,6 +297,7 @@ test('extractProtectedMaterial rejects unverified decisions and issues Authorize
     canonicalUrl: identity.canonicalUrl,
     sessionEpoch: 2,
     expiresAt: Date.now() + 600_000,
+    classRevision: getClassRevision('account-a', 2, identity.canonicalUrl),
   };
   const proof = extractProtectedMaterial(doc, identity, validDecision, { sessionEpoch: 2 });
   assert.ok(proof.proofId);

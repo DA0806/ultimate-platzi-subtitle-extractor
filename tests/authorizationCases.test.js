@@ -5,6 +5,7 @@ import {
   evaluateClassCapabilities,
   extractProtectedMaterial,
   assertAuthorizedExportProof,
+  getClassRevision,
 } from '../src/utils/platziAccess.js';
 import { useAuthStore } from '../src/store/authStore.js';
 import { useSubtitleStore } from '../src/store/subtitleStore.js';
@@ -278,11 +279,26 @@ test('Case 11: Worker restart or expired TTL invalidates ephemeral proof', () =>
   const proof = {
     proofId: 'test-proof',
     classId: 70442,
+    courseId: 10266,
+    canonicalUrl: pageUrl,
+    classRevision: getClassRevision('account-a', 0, pageUrl),
     authorizedVttUrls: ['https://static.platzi.com/media/subtitle/class-es.vtt'],
     sessionEpoch: 0,
     expiresAt: Date.now() - 1000, // Expired
     sessionAccount: 'account-a',
-    capabilities: { verified: true },
+    capabilities: {
+      verified: true,
+      authenticated: true,
+      canView: true,
+      canExport: true,
+      canExportSubtitles: true,
+      accountId: 'account-a',
+      sessionEpoch: 0,
+      courseId: 10266,
+      classId: 70442,
+      canonicalUrl: pageUrl,
+      expiresAt: Date.now() + 600_000,
+    },
   };
 
   assert.throws(
@@ -303,11 +319,26 @@ test('Case 12: Account rotation or discrepancy triggers session invalidation and
   const proof = {
     proofId: 'proof-12',
     classId: 70442,
+    courseId: 10266,
+    canonicalUrl: pageUrl,
+    classRevision: getClassRevision('account_A', 1, pageUrl),
     authorizedVttUrls: ['https://static.platzi.com/media/subtitle/class-es.vtt'],
     sessionAccount: 'account_A',
     sessionEpoch: 1,
     expiresAt: Date.now() + 600_000,
-    capabilities: { verified: true },
+    capabilities: {
+      verified: true,
+      authenticated: true,
+      canView: true,
+      canExport: true,
+      canExportSubtitles: true,
+      accountId: 'account_A',
+      sessionEpoch: 1,
+      courseId: 10266,
+      classId: 70442,
+      canonicalUrl: pageUrl,
+      expiresAt: Date.now() + 600_000,
+    },
   };
 
   // Discrepancy detected with active account B
@@ -325,9 +356,9 @@ test('Case 12: Account rotation or discrepancy triggers session invalidation and
 });
 
 // ---------------------------------------------------------
-// Case 13: 401 Unauthorized halts batch, increments epoch, and purges content
+// Case 13: generic 403/401/network keeps identity; verified expired/account switch invalidates
 // ---------------------------------------------------------
-test('Case 13: 401 during request halts batch and purges content immediately', async () => {
+test('Case 13: generic 401/403 preserves identity while verified expired or account switch invalidates', async () => {
   useAuthStore.setState({ sessionEpoch: 3, sessionStatus: 'authenticated' });
   useSubtitleStore.setState({
     videos: [{ id: 'v1', status: 'ready', extractedContent: { es: 'text' } }],
@@ -342,11 +373,17 @@ test('Case 13: 401 during request halts batch and purges content immediately', a
     text: async () => 'Unauthorized',
   });
 
+  // Generic 401 on resource does NOT invalidate global session or increment epoch
   await assert.rejects(
     getPlatziPage('https://platzi.com/cursos/javascript/'),
-    error => error.code === 'PLATZI_SESSION_INVALIDATED',
+    error => error.code === 'PLATZI_UNAUTHORIZED' && error.status === 401,
   );
 
+  assert.equal(useAuthStore.getState().sessionEpoch, 3, 'generic 401 must keep sessionEpoch intact');
+  assert.equal(useAuthStore.getState().sessionStatus, 'authenticated', 'generic 401 must keep authenticated status');
+
+  // Authoritative verified expiration or account switch DOES invalidate session
+  useAuthStore.getState().invalidateSession();
   assert.equal(useAuthStore.getState().sessionEpoch, 4);
   assert.equal(useAuthStore.getState().sessionStatus, 'session_invalid');
 });

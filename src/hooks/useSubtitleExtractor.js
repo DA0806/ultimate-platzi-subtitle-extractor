@@ -1,12 +1,14 @@
 import { useSubtitleStore } from '../store/subtitleStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useAuthStore } from '../store/authStore';
-import { defaultAuthorizationService } from '../utils/authorizationService.js';
+import { defaultAuthorizationService, getSessionValidityDeadline } from '../utils/authorizationService.js';
 import { getPlatziPage, getVtt } from '../utils/platziClient';
 import {
   inspectClassIdentityDocument,
   extractProtectedMaterial,
   createPlatziAccessError,
+  getClassRevision,
+  bumpClassRevision,
 } from '../utils/platziAccess.js';
 import { parseVtt } from '../utils/vttParser';
 import { translate } from '../i18n';
@@ -128,7 +130,8 @@ export const useSubtitleExtractor = () => {
       release();
 
       const session = await defaultAuthorizationService.adapter.checkSession();
-      if (session?.status !== 'verified' || session.authenticated !== true || !session.accountId || !Number.isFinite(session.expiresAt) || session.expiresAt <= Date.now() || session.sessionEpoch !== useAuthStore.getState().sessionEpoch) {
+      const sessionDeadline = getSessionValidityDeadline(session, Date.now());
+      if (session?.status !== 'verified' || session.authenticated !== true || !session.accountId || sessionDeadline <= Date.now() || session.sessionEpoch !== useAuthStore.getState().sessionEpoch) {
         const error = new Error('La autorización oficial de la sesión ya no está vigente.');
         error.code = 'AUTHORIZATION_RECHECK_FAILED';
         throw error;
@@ -137,12 +140,19 @@ export const useSubtitleExtractor = () => {
 
     const registerFailure = (error) => {
       const notice = getExtractionNotice(error);
-      if (error?.code === 'PLATZI_SESSION_INVALIDATED' || error?.status === 401 || error?.status === 403) {
+      if (error?.code === 'PLATZI_SESSION_INVALIDATED') {
         stopRequested = true;
         useAuthStore.getState().invalidateSession();
         useSubtitleStore.getState().purgeExtractedContent();
         if (notice) setExtractionNotice(notice);
         return true;
+      }
+
+      // Per-class resource failures (401 / 403 / PLATZI_UNAUTHORIZED / PLATZI_FORBIDDEN)
+      // do not invalidate the global session or purge other classes' extracted content.
+      const status = error?.response?.status || error?.status;
+      if (status === 401 || status === 403 || error?.code === 'PLATZI_UNAUTHORIZED' || error?.code === 'PLATZI_FORBIDDEN') {
+        return false;
       }
 
       if (notice) {
@@ -161,12 +171,16 @@ export const useSubtitleExtractor = () => {
         }
 
         const video = pendingVideos[index++];
+        const startRevision = getClassRevision(sessionCheck.accountId, jobEpoch, video.url);
         updateVideo(video.id, { status: 'extracting' });
         
         try {
           // Resolve and authorize the public identity before the first class request.
           let preauthorization = await defaultAuthorizationService.authorizeClassUrl(video.url);
           if (!preauthorization.verified) {
+            if (preauthorization.restrictionReason === 'CLASS_ACCESS_DENIED' || preauthorization.restrictionReason === 'EXPORT_PERMISSION_DENIED') {
+              bumpClassRevision(sessionCheck.accountId, jobEpoch, video.url);
+            }
             const authorizationError = new Error('La autorización oficial de esta clase no está disponible.');
             authorizationError.code = preauthorization.restrictionReason || 'AUTHORIZATION_UNAVAILABLE';
             throw authorizationError;
@@ -179,6 +193,9 @@ export const useSubtitleExtractor = () => {
               await waitForRequestSlot();
               preauthorization = await defaultAuthorizationService.authorizeClassUrl(video.url);
               if (!preauthorization.verified) {
+                if (preauthorization.restrictionReason === 'CLASS_ACCESS_DENIED' || preauthorization.restrictionReason === 'EXPORT_PERMISSION_DENIED') {
+                  bumpClassRevision(sessionCheck.accountId, jobEpoch, video.url);
+                }
                 const authorizationError = new Error('La autorización oficial de esta clase ya no está vigente.');
                 authorizationError.code = preauthorization.restrictionReason || 'AUTHORIZATION_RECHECK_FAILED';
                 throw authorizationError;
@@ -275,7 +292,11 @@ export const useSubtitleExtractor = () => {
                   hasSuccess = true;
                 }
               } catch (err) {
-                console.error(`Error descargando VTT desde ${vttUrl}`, err);
+                console.error('Error descargando VTT', {
+                  code: err?.code || 'UNKNOWN_ERROR',
+                  status: err?.status || err?.response?.status || null,
+                  classSlug: video.slug,
+                });
                 if (registerFailure(err)) break;
               }
             }
@@ -283,6 +304,8 @@ export const useSubtitleExtractor = () => {
 
           // Verificación de stale race antes de escribir estado consolidado
           if (stopRequested || useAuthStore.getState().sessionEpoch !== jobEpoch) return;
+          const currentRev = getClassRevision(sessionCheck.accountId, jobEpoch, video.url);
+          if (currentRev !== startRevision) return;
 
           if (hasSuccess) {
             const extractedLangs = Object.keys(extractedContent).filter((lang) => SUPPORTED_LANGS.includes(lang));
@@ -300,7 +323,14 @@ export const useSubtitleExtractor = () => {
           }
 
         } catch (error) {
-          console.error(`Error procesando clase ${video.slug}`, error);
+          console.error('Error procesando clase', {
+            code: error?.code || 'UNKNOWN_ERROR',
+            status: error?.status || error?.response?.status || null,
+            classSlug: video.slug,
+          });
+          if (error?.code === 'CLASS_ACCESS_DENIED' || error?.code === 'EXPORT_PERMISSION_DENIED') {
+            bumpClassRevision(sessionCheck.accountId, jobEpoch, video.url);
+          }
           registerFailure(error);
           if (useAuthStore.getState().sessionEpoch === jobEpoch) {
             updateVideo(video.id, { status: 'error' });

@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Archive, CheckCircle2, Copy, Download } from 'lucide-react';
 import { useSubtitleStore } from '../store/subtitleStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { downloadMergedTxt, downloadZip } from '../utils/downloader';
-import { mergeSubtitles } from '../utils/textMerger';
+import { downloadMergedTxt, downloadZip, copyMergedTxt } from '../utils/downloader';
 import { Button } from './ui/Button';
 import { Progress } from './ui/Progress';
 import { useI18n } from '../i18n';
@@ -29,11 +28,15 @@ export const ExportPanel = () => {
 
   if (videos.length === 0 || exportableVideos.length === 0 || isExtracting || extractionNotice) return null;
 
-  const handleCopy = () => {
-    const text = mergeSubtitles(exportableVideos, preferredLang === 'all' ? 'es' : preferredLang);
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await copyMergedTxt(exportableVideos, preferredLang === 'all' ? 'es' : preferredLang);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      setCopied(false);
+      useSubtitleStore.getState().setExtractionNotice(error.message);
+    }
   };
 
   const handleDownloadTxt = async () => {

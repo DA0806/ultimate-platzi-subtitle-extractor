@@ -1,5 +1,5 @@
 import { getPlatziPage } from './platziClient.js';
-import { inspectClassIdentityDocument } from './platziAccess.js';
+import { inspectClassIdentityDocument, resolvePublicClassIdentity } from './platziAccess.js';
 
 const EXCLUDED_CLASS_SLUGS = new Set([
   'opiniones',
@@ -33,6 +33,28 @@ export const parsePlatziUrl = async (url) => {
 
     const courseSlug = pathParts[1];
     const isSingleVideo = pathParts.length > 2;
+
+    if (isSingleVideo) {
+      const resolved = await resolvePublicClassIdentity(url);
+      if (resolved?.status === 'verified' && resolved.identity) {
+        const id = resolved.identity;
+        return {
+          courseSlug,
+          title: `Curso de ${courseSlug.replace(/-/g, ' ')}`,
+          videos: [{
+            id: 'vid-single',
+            slug: id.classSlug || pathParts[2],
+            title: id.title || `Clase: ${pathParts[2].replace(/-/g, ' ')}`,
+            duration: '00:00',
+            url: id.canonicalUrl || url,
+            status: 'pending',
+            selected: true,
+            availableLangs: [],
+            extractedContent: {},
+          }],
+        };
+      }
+    }
 
     const response = await getPlatziPage(url);
     const html = response.data;

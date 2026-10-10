@@ -1,13 +1,57 @@
 import { useAuthStore } from '../store/authStore.js';
+import { bumpClassRevision, getClassRevision, resolvePublicClassIdentity } from './platziAccess.js';
+import { platziSessionAdapter } from './platziSessionAdapter.js';
 
 const UNKNOWN_REASON = 'AUTHORIZATION_UNAVAILABLE';
 
 const unknownResult = () => ({ status: 'unknown' });
 
+export const getSessionValidityDeadline = (session) => {
+  if (!session) return 0;
+  const candidates = [];
+  if (Number.isFinite(session.validUntil)) candidates.push(session.validUntil);
+  if (Number.isFinite(session.expiresAt)) candidates.push(session.expiresAt);
+  if (Number.isFinite(session.sessionExpiresAt)) candidates.push(session.sessionExpiresAt);
+  return candidates.length > 0 ? Math.min(...candidates) : 0;
+};
+
 export const createUnknownAuthorizationAdapter = () => Object.freeze({
   async checkSession() { return unknownResult(); },
   async checkClassAccess() { return unknownResult(); },
   async checkExportPermission() { return unknownResult(); },
+});
+
+export const createProductionAuthorizationAdapter = () => Object.freeze({
+  async checkSession() {
+    return platziSessionAdapter.checkSession();
+  },
+  async checkClassAccess(identity, session) {
+    return {
+      status: 'unknown',
+      canView: false,
+      reason: 'CLASS_ENTITLEMENT_UNKNOWN',
+      accountId: session?.accountId,
+      sessionEpoch: session?.sessionEpoch,
+      courseId: identity?.courseId,
+      classId: identity?.classId,
+      canonicalUrl: identity?.canonicalUrl,
+    };
+  },
+  async checkExportPermission(identity, session) {
+    return {
+      status: 'unknown',
+      canExport: false,
+      reason: 'EXPORT_PERMISSION_UNKNOWN',
+      accountId: session?.accountId,
+      sessionEpoch: session?.sessionEpoch,
+      courseId: identity?.courseId,
+      classId: identity?.classId,
+      canonicalUrl: identity?.canonicalUrl,
+    };
+  },
+  async resolveClassIdentity(canonicalUrl) {
+    return resolvePublicClassIdentity(canonicalUrl);
+  },
 });
 
 const deny = (reason = UNKNOWN_REASON) => ({
@@ -51,7 +95,7 @@ const validSession = (session, now) => (
   session.authenticated === true &&
   Boolean(session.accountId) &&
   Number.isInteger(session.sessionEpoch) &&
-  finiteFuture(session.expiresAt, now)
+  finiteFuture(getSessionValidityDeadline(session, now), now)
 );
 
 const validResolvedIdentity = (result, canonicalUrl) => {
@@ -61,11 +105,11 @@ const validResolvedIdentity = (result, canonicalUrl) => {
 };
 
 /**
- * The only production default is an unknown adapter. A future official
- * integration must be supplied when constructing the service explicitly.
+ * The production default is the real Platzi session adapter with explicit
+ * unknown gates for class access and export permission.
  */
 export class AuthorizationService {
-  constructor(adapter = createUnknownAuthorizationAdapter(), options = {}) {
+  constructor(adapter = createProductionAuthorizationAdapter(), options = {}) {
     if (!adapter || typeof adapter.checkSession !== 'function' || typeof adapter.checkClassAccess !== 'function' || typeof adapter.checkExportPermission !== 'function') {
       throw new TypeError('Authorization adapter must implement checkSession, checkClassAccess, and checkExportPermission');
     }
@@ -83,18 +127,34 @@ export class AuthorizationService {
     let session;
     let access;
     let exportPermission;
+    let classRevision;
+    const operationEpoch = this.getSessionEpoch();
     try {
       session = options.session || await this.adapter.checkSession();
+      if (this.getSessionEpoch() !== operationEpoch) {
+        return deny('SESSION_EPOCH_MISMATCH');
+      }
       if (!validSession(session, now)) {
         return deny(UNKNOWN_REASON);
       }
 
+      classRevision = getClassRevision(session.accountId, session.sessionEpoch, identity.canonicalUrl);
+      if (session.sessionEpoch !== operationEpoch || classRevision !== getClassRevision(session.accountId, session.sessionEpoch, identity.canonicalUrl)) {
+        return deny('SESSION_EPOCH_MISMATCH');
+      }
+
       access = await this.adapter.checkClassAccess(identity, session);
+      if (this.getSessionEpoch() !== operationEpoch || classRevision !== getClassRevision(session.accountId, session.sessionEpoch, identity.canonicalUrl)) {
+        return deny('AUTHORIZATION_BINDING_MISMATCH');
+      }
       if (!validStatus(access) || access.canView !== true || !sameIdentity(identity, access) || access.accountId !== session.accountId || access.sessionEpoch !== session.sessionEpoch || !finiteFuture(access.expiresAt, now)) {
         return deny(access?.status === 'denied' ? 'CLASS_ACCESS_DENIED' : 'AUTHORIZATION_BINDING_MISMATCH');
       }
 
       exportPermission = await this.adapter.checkExportPermission(identity, session, access);
+      if (this.getSessionEpoch() !== operationEpoch || classRevision !== getClassRevision(session.accountId, session.sessionEpoch, identity.canonicalUrl)) {
+        return deny('AUTHORIZATION_BINDING_MISMATCH');
+      }
       if (!validStatus(exportPermission) || exportPermission.canExport !== true || !sameIdentity(identity, exportPermission) || exportPermission.accountId !== session.accountId || exportPermission.sessionEpoch !== session.sessionEpoch || !finiteFuture(exportPermission.expiresAt, now)) {
         return deny(exportPermission?.status === 'denied' ? 'EXPORT_PERMISSION_DENIED' : 'AUTHORIZATION_BINDING_MISMATCH');
       }
@@ -103,12 +163,14 @@ export class AuthorizationService {
     }
 
     const currentEpoch = this.getSessionEpoch();
-    if (session.sessionEpoch !== currentEpoch || access.sessionEpoch !== currentEpoch || exportPermission.sessionEpoch !== currentEpoch) {
+    if (session.sessionEpoch !== currentEpoch || access.sessionEpoch !== currentEpoch || exportPermission.sessionEpoch !== currentEpoch || classRevision !== getClassRevision(session.accountId, session.sessionEpoch, identity.canonicalUrl)) {
       return deny('SESSION_EPOCH_MISMATCH');
     }
 
-    const expiresAt = Math.min(session.expiresAt, access.expiresAt, exportPermission.expiresAt);
-    if (!finiteFuture(expiresAt, now)) return deny('AUTHORIZATION_EXPIRED');
+    const returnNow = this.now();
+    const sessionDeadline = getSessionValidityDeadline(session, returnNow);
+    const expiresAt = Math.min(sessionDeadline, access.expiresAt, exportPermission.expiresAt);
+    if (!finiteFuture(expiresAt, returnNow)) return deny('AUTHORIZATION_EXPIRED');
 
     return {
       authenticated: true,
@@ -125,6 +187,7 @@ export class AuthorizationService {
       accountId: session.accountId,
       sessionAccount: session.accountId,
       sessionEpoch: session.sessionEpoch,
+      classRevision,
       expiresAt,
       courseId: identity.courseId,
       classId: identity.classId,
@@ -142,30 +205,68 @@ export class AuthorizationService {
     try {
       session = await this.adapter.checkSession();
       if (!validSession(session, now)) return deny(UNKNOWN_REASON);
+      const operationEpoch = this.getSessionEpoch();
       if (typeof this.adapter.resolveClassIdentity !== 'function') return deny('UNKNOWN_CLASS_IDENTITY');
       const resolved = validResolvedIdentity(
         await this.adapter.resolveClassIdentity(canonicalUrl, session),
         canonicalUrl,
       );
       if (!resolved) return deny('UNKNOWN_CLASS_IDENTITY');
-      if (session.sessionEpoch !== this.getSessionEpoch()) return deny('SESSION_EPOCH_MISMATCH');
+      if (session.sessionEpoch !== operationEpoch || operationEpoch !== this.getSessionEpoch()) return deny('SESSION_EPOCH_MISMATCH');
       const decision = await this.authorize(resolved, { session });
+      if (operationEpoch !== this.getSessionEpoch()) return deny('SESSION_EPOCH_MISMATCH');
       return decision.verified ? { ...decision, identity: resolved } : decision;
     } catch {
       return deny(UNKNOWN_REASON);
     }
   }
 
-  async recheck(identity) {
-    const decision = await this.authorize(identity);
-    if (!decision.verified) useAuthStore.getState().invalidateSession();
+  async recheck(identity, options = {}) {
+    const now = this.now();
+    const operationEpoch = this.getSessionEpoch();
+    let session;
+    try {
+      session = await this.adapter.checkSession();
+      if (this.getSessionEpoch() !== operationEpoch) return deny('SESSION_EPOCH_MISMATCH');
+      if (session) {
+        const currentEpoch = this.getSessionEpoch();
+        if (currentEpoch !== operationEpoch || (Number.isInteger(session.sessionEpoch) && session.sessionEpoch !== currentEpoch)) {
+          return deny('SESSION_EPOCH_MISMATCH');
+        }
+
+        const isAuthoritative = session.status === 'verified' || session.status === 'unauthenticated';
+        if (isAuthoritative) {
+          if (options.expectedAccount && session.accountId && session.accountId !== options.expectedAccount) {
+            useAuthStore.getState().invalidateSession();
+            return deny('SESSION_ACCOUNT_MISMATCH');
+          }
+          if (session.authenticated === false || session.status === 'unauthenticated') {
+            useAuthStore.getState().invalidateSession();
+            return deny('UNAUTHENTICATED');
+          }
+          if (Number.isFinite(session.expiresAt) && session.expiresAt <= now) {
+            useAuthStore.getState().invalidateSession();
+            return deny('AUTHORIZATION_EXPIRED');
+          }
+        }
+      }
+    } catch {
+      return deny(UNKNOWN_REASON);
+    }
+
+    const decision = await this.authorize(identity, { session });
+    if (this.getSessionEpoch() !== operationEpoch) return deny('SESSION_EPOCH_MISMATCH');
+    if (decision?.restrictionReason === 'CLASS_ACCESS_DENIED' || decision?.restrictionReason === 'EXPORT_PERMISSION_DENIED') {
+      if (this.getSessionEpoch() !== operationEpoch) return deny('SESSION_EPOCH_MISMATCH');
+      bumpClassRevision(session?.accountId, session?.sessionEpoch, identity.canonicalUrl);
+    }
     return decision;
   }
 }
 
 export const createAuthorizationService = (adapter, options) => new AuthorizationService(adapter, options);
 
-export const defaultAuthorizationService = new AuthorizationService(undefined, {
+export const defaultAuthorizationService = new AuthorizationService(createProductionAuthorizationAdapter(), {
   getSessionEpoch: () => useAuthStore.getState().sessionEpoch || 0,
 });
 

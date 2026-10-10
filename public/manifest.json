@@ -14,7 +14,8 @@
   "host_permissions": [
     "https://platzi.com/*",
     "https://www.platzi.com/*",
-    "https://static.platzi.com/*"
+    "https://static.platzi.com/*",
+    "https://api.platzi.com/*"
   ],
   "icons": {
     "16": "icons/icon-16.png",

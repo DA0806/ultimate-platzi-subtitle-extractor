@@ -67,12 +67,21 @@ const assertAuthorizedClassPage = async (targetUrl) => {
   return decision;
 };
 
+const assertCurrentVttOperation = (proof, vttUrl, operationEpoch) => {
+  const currentEpoch = useAuthStore?.getState?.()?.sessionEpoch;
+  if (currentEpoch !== operationEpoch || proof.sessionEpoch !== currentEpoch) {
+    const error = new Error('La sesión de usuario fue invalidada o rotada');
+    error.code = 'PLATZI_SESSION_INVALIDATED';
+    throw error;
+  }
+  assertAuthorizedExportProof(proof, vttUrl, { currentSessionEpoch: currentEpoch });
+};
+
 const rejectLoginRedirect = (value) => {
   const pathname = new URL(value).pathname.replace(/\/+$/, '');
   if (pathname === '/login' || pathname === '/iniciar-sesion') {
-    useAuthStore.getState().invalidateSession();
     const error = new Error('Platzi redirigió la solicitud a una pantalla de inicio de sesión.');
-    error.code = 'PLATZI_SESSION_INVALIDATED';
+    error.code = 'PLATZI_UNAUTHORIZED';
     error.status = 401;
     throw error;
   }
@@ -82,15 +91,23 @@ const handleHttpResponseErrors = async (response) => {
   if (response.ok) return;
 
   const errorText = await response.text().catch(() => '');
-  if (response.status === 401 || response.status === 403) {
-    try {
-      useAuthStore.getState().invalidateSession();
-    } catch {
-      // Ignore if store is uninitialized
-    }
-    const error = new Error(`Sesión de Platzi no autorizada o expirada (${response.status}): ${response.statusText}`);
-    error.code = 'PLATZI_SESSION_INVALIDATED';
-    error.status = response.status;
+
+  if (response.status === 401) {
+    const error = new Error(`Recurso de Platzi no autorizado (401): ${response.statusText}`);
+    error.code = 'PLATZI_UNAUTHORIZED';
+    error.status = 401;
+    error.response = {
+      status: response.status,
+      statusText: response.statusText,
+      data: errorText,
+    };
+    throw error;
+  }
+
+  if (response.status === 403) {
+    const error = new Error(`Acceso a recurso denegado o restringido en Platzi (403): ${response.statusText}`);
+    error.code = 'PLATZI_FORBIDDEN';
+    error.status = 403;
     error.response = {
       status: response.status,
       statusText: response.statusText,
@@ -189,9 +206,10 @@ export const getPlatziPage = async (urlOrPath) => {
       statusText: response.statusText,
     };
   } catch (err) {
-    if (err.response?.status === 401 || err.response?.status === 403) {
-      useAuthStore.getState().invalidateSession();
-      err.code = 'PLATZI_SESSION_INVALIDATED';
+    if (err.response?.status === 401) {
+      err.code = 'PLATZI_UNAUTHORIZED';
+    } else if (err.response?.status === 403) {
+      err.code = 'PLATZI_FORBIDDEN';
     } else if (err.response?.status === 429) {
       err.code = 'PLATZI_RATE_LIMITED';
     }
@@ -204,6 +222,7 @@ export const getVtt = async (vttUrl, referer = null, ...legacyArgs) => {
   assertAllowedVttRequest(vttUrl);
   if (referer) assertAllowedPageUrl(referer);
   const currentEpoch = useAuthStore?.getState?.()?.sessionEpoch;
+  const operationEpoch = currentEpoch;
   const targetProof = accessProof;
   assertAuthorizedExportProof(targetProof, vttUrl, { currentSessionEpoch: currentEpoch });
   if (referer) {
@@ -216,7 +235,8 @@ export const getVtt = async (vttUrl, referer = null, ...legacyArgs) => {
     canonicalUrl: targetProof.canonicalUrl,
   };
   const currentDecision = await defaultAuthorizationService.recheck(identity);
-  if (!currentDecision.verified || currentDecision.accountId !== targetProof.sessionAccount || currentDecision.sessionEpoch !== targetProof.sessionEpoch) {
+  assertCurrentVttOperation(targetProof, vttUrl, operationEpoch);
+  if (!currentDecision.verified || currentDecision.accountId !== targetProof.sessionAccount || currentDecision.sessionEpoch !== targetProof.sessionEpoch || currentDecision.courseId !== targetProof.courseId || currentDecision.classId !== targetProof.classId || currentDecision.canonicalUrl !== targetProof.canonicalUrl || currentDecision.classRevision !== targetProof.classRevision) {
     const error = new Error('La autorización de exportación ya no es válida');
     error.code = 'AUTHORIZATION_RECHECK_FAILED';
     throw error;
@@ -229,8 +249,10 @@ export const getVtt = async (vttUrl, referer = null, ...legacyArgs) => {
     });
 
     await handleHttpResponseErrors(response);
+    assertCurrentVttOperation(targetProof, vttUrl, operationEpoch);
 
     const vttText = await response.text();
+    assertCurrentVttOperation(targetProof, vttUrl, operationEpoch);
     return {
       data: vttText,
       status: response.status,
@@ -252,15 +274,18 @@ export const getVtt = async (vttUrl, referer = null, ...legacyArgs) => {
       transformResponse: [(data) => data],
     });
 
+    assertCurrentVttOperation(targetProof, vttUrl, operationEpoch);
+
     return {
       data: response.data,
       status: response.status,
       statusText: response.statusText,
     };
   } catch (err) {
-    if (err.response?.status === 401 || err.response?.status === 403) {
-      useAuthStore.getState().invalidateSession();
-      err.code = 'PLATZI_SESSION_INVALIDATED';
+    if (err.response?.status === 401) {
+      err.code = 'PLATZI_UNAUTHORIZED';
+    } else if (err.response?.status === 403) {
+      err.code = 'PLATZI_FORBIDDEN';
     } else if (err.response?.status === 429) {
       err.code = 'PLATZI_RATE_LIMITED';
     }

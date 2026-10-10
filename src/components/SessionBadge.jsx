@@ -6,12 +6,14 @@ import { useAuthStore } from '../store/authStore';
 export const SessionBadge = () => {
   const { t } = useI18n();
   const sessionStatus = useAuthStore(state => state.sessionStatus);
+  const user = useAuthStore(state => state.user);
+  const planLabel = user?.plan || user?.userType;
 
   if (sessionStatus === 'authenticated') {
     return (
       <Badge variant="success" className="gap-1.5" title={t('session.authenticated')}>
         <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />
-        {t('session.authenticated')}
+        {planLabel ? `${t('session.authenticated')} (${planLabel})` : t('session.authenticated')}
       </Badge>
     );
   }
