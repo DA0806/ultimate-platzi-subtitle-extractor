@@ -215,38 +215,226 @@ const extractCurrentMaterialVttUrls = (payload, classId, className) => {
   return urls;
 };
 
-const inspectDocument = (document, pageUrl) => {
-  if (!isClassPagePath(pageUrl)) return { status: ACCESS_STATUS.UNKNOWN };
+export const inspectClassIdentityDocument = (document, pageUrl) => {
+  if (!isClassPagePath(pageUrl)) return null;
   const normalizedPageUrl = normalizePageUrl(pageUrl);
   const canonicalHref = document.querySelector('link[rel="canonical"]')?.href || '';
   const canonicalUrl = normalizePageUrl(canonicalHref);
-  if (!normalizedPageUrl || !canonicalUrl || canonicalUrl !== normalizedPageUrl) return { status: ACCESS_STATUS.UNKNOWN };
+  if (!normalizedPageUrl || !canonicalUrl || canonicalUrl !== normalizedPageUrl) return null;
 
   const currentName = normalizeText(document.querySelector('h1')?.textContent || document.title);
-  if (!currentName) return { status: ACCESS_STATUS.UNKNOWN };
+  if (!currentName) return null;
+
+  const parts = new URL(normalizedPageUrl).pathname.split('/').filter(Boolean);
+  const courseSlug = parts[1] || '';
+  const classSlug = parts[2] || '';
 
   const payloads = [];
   for (const script of document.querySelectorAll('script')) {
     payloads.push(...parseNextFlightPushes(script.textContent || ''));
   }
   const records = parsePageViewRecords(payloads.join(''));
-  if (!records) return { status: ACCESS_STATUS.UNKNOWN };
+  if (!records) return null;
   const currentRecords = records
     .filter(record => isClassPageEvent(record))
     .map(record => record.properties)
     .filter(properties => normalizeText(properties.class_name) === currentName);
-  if (currentRecords.length !== 1) return { status: ACCESS_STATUS.UNKNOWN };
+  if (currentRecords.length !== 1) return null;
 
   const properties = currentRecords[0];
   return {
-    status: properties.class_is_free ? ACCESS_STATUS.FREE : ACCESS_STATUS.NOT_FREE,
-    classId: properties.class_id,
-    classPosition: properties.class_position,
-    className: normalizeText(properties.class_name),
     courseId: properties.course_id,
     courseName: normalizeText(properties.course_name),
-    pageUrl: normalizedPageUrl,
-    vttUrls: extractCurrentMaterialVttUrls(payloads.join(''), properties.class_id, normalizeText(properties.class_name)),
+    courseSlug,
+    classId: properties.class_id,
+    classSlug,
+    classPosition: properties.class_position,
+    canonicalUrl: normalizedPageUrl,
+    title: normalizeText(properties.class_name),
+    isFreePublic: Boolean(properties.class_is_free),
+  };
+};
+
+export const inspectClassIdentity = (html, pageUrl) => {
+  if (typeof html !== 'string' || typeof DOMParser !== 'function') return null;
+  return inspectClassIdentityDocument(new DOMParser().parseFromString(html, 'text/html'), pageUrl);
+};
+
+export const evaluateClassCapabilities = (identity) => {
+  if (!identity || typeof identity !== 'object') {
+    return {
+      authenticated: false,
+      authentication: 'unknown',
+      canView: false,
+      viewAccess: 'unknown',
+      canExportSubtitles: false,
+      subtitleExport: 'unknown',
+      canExport: false,
+      entitlementTier: 'unknown_restricted',
+      exportGrantSource: 'none',
+      restrictionReason: 'UNKNOWN_CLASS_IDENTITY',
+      verified: false,
+    };
+  }
+  return {
+    authenticated: false,
+    authentication: 'unknown',
+    canView: false,
+    viewAccess: 'unknown',
+    canExportSubtitles: false,
+    subtitleExport: 'unknown',
+    canExport: false,
+    entitlementTier: identity.isFreePublic ? 'free_public' : 'subscriber_only',
+    exportGrantSource: 'none',
+    restrictionReason: 'AUTHORIZATION_UNAVAILABLE',
+    verified: false,
+  };
+};
+
+export const extractProtectedMaterial = (document, identity, capabilityDecision, options = {}) => {
+  const isAuthorized = Boolean(
+    capabilityDecision?.verified === true &&
+    capabilityDecision.authenticated === true &&
+    capabilityDecision.canView === true &&
+    capabilityDecision.canExportSubtitles === true &&
+    capabilityDecision.canExport === true &&
+    Number.isInteger(capabilityDecision.sessionEpoch) &&
+    capabilityDecision.accountId &&
+    Number.isFinite(capabilityDecision.expiresAt) && capabilityDecision.expiresAt > Date.now() &&
+    capabilityDecision.courseId === identity?.courseId &&
+    capabilityDecision.classId === identity?.classId &&
+    capabilityDecision.canonicalUrl === identity?.canonicalUrl
+  );
+
+  if (!isAuthorized) {
+    throw createPlatziAccessError(capabilityDecision?.restrictionReason || ACCESS_STATUS.NOT_FREE);
+  }
+  if (options.sessionEpoch !== undefined && options.sessionEpoch !== capabilityDecision.sessionEpoch) {
+    const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
+    error.code = 'PLATZI_SESSION_INVALIDATED';
+    throw error;
+  }
+  if (options.sessionAccount !== undefined && options.sessionAccount !== capabilityDecision.accountId) {
+    const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
+    error.code = 'SESSION_ACCOUNT_MISMATCH';
+    throw error;
+  }
+
+  const payloads = [];
+  for (const script of document.querySelectorAll('script')) {
+    payloads.push(...parseNextFlightPushes(script.textContent || ''));
+  }
+  const vttUrls = extractCurrentMaterialVttUrls(payloads.join(''), identity.classId, identity.title);
+  const now = Date.now();
+  const ttlMs = Math.min(Math.max(Number(options.ttlMs) || 600_000, 1), 600_000);
+  const randomSuffix = Math.random().toString(36).slice(2);
+  const proofId = options.proofId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `proof-${now}-${randomSuffix}`);
+
+  return {
+    proofId,
+    classId: identity.classId,
+    courseId: identity.courseId,
+    canonicalUrl: identity.canonicalUrl,
+    pageUrl: normalizePageUrl(options.pageUrl || identity.canonicalUrl),
+    authorizedVttUrls: vttUrls,
+    issuedAt: now,
+    expiresAt: Math.min(now + ttlMs, capabilityDecision.expiresAt),
+    sessionFingerprint: options.sessionFingerprint || `verified-${capabilityDecision.accountId}`,
+    sessionAccount: options.sessionAccount ?? capabilityDecision.accountId,
+    sessionEpoch: options.sessionEpoch ?? capabilityDecision.sessionEpoch,
+    status: identity.isFreePublic ? ACCESS_STATUS.FREE : ACCESS_STATUS.NOT_FREE,
+    capabilities: capabilityDecision,
+    vttUrls,
+    identity: {
+      courseId: identity.courseId,
+      classId: identity.classId,
+      canonicalUrl: identity.canonicalUrl,
+    },
+  };
+};
+
+export const assertAuthorizedExportProof = (proof, targetVttUrl, options = {}) => {
+  if (!proof || typeof proof !== 'object') {
+    const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
+    error.code = 'PLATZI_ACCESS_UNVERIFIED';
+    throw error;
+  }
+
+  if (proof.capabilities?.verified !== true || !proof.sessionAccount || !Number.isInteger(proof.sessionEpoch)) {
+    const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
+    error.code = 'PLATZI_ACCESS_UNVERIFIED';
+    throw error;
+  }
+
+  const now = Date.now();
+  if (!Number.isFinite(proof.expiresAt)) {
+    const error = createPlatziAccessError(ACCESS_STATUS.UNKNOWN);
+    error.code = 'PLATZI_ACCESS_UNVERIFIED';
+    throw error;
+  }
+  if (now >= proof.expiresAt) {
+    const error = new Error('La prueba de autorización de exportación ha caducado');
+    error.code = 'PROOF_EXPIRED';
+    throw error;
+  }
+
+  if (options.currentSessionEpoch !== undefined && proof.sessionEpoch !== undefined && proof.sessionEpoch !== options.currentSessionEpoch) {
+    const error = new Error('La sesión de usuario fue invalidada o rotada');
+    error.code = 'PLATZI_SESSION_INVALIDATED';
+    throw error;
+  }
+
+  if (options.currentAccount !== undefined && proof.sessionAccount && proof.sessionAccount !== options.currentAccount) {
+    const error = new Error('La cuenta de sesión cambió durante la operación');
+    error.code = 'SESSION_ACCOUNT_MISMATCH';
+    throw error;
+  }
+
+  if (options.identity && (
+    proof.classId !== options.identity.classId ||
+    proof.courseId !== options.identity.courseId ||
+    proof.canonicalUrl !== options.identity.canonicalUrl
+  )) {
+    const error = new Error('La prueba no coincide con la identidad de la clase');
+    error.code = 'AUTHORIZATION_BINDING_MISMATCH';
+    throw error;
+  }
+
+  const normTarget = normalizeVttUrl(targetVttUrl);
+  if (!normTarget) {
+    const error = new Error('URL de subtítulo inválida o no permitida');
+    error.code = 'INVALID_VTT_URL';
+    throw error;
+  }
+
+  const allowedUrls = proof.authorizedVttUrls || proof.vttUrls || [];
+  if (!allowedUrls.includes(normTarget)) {
+    const error = new Error('La URL de subtítulo no coincide con las pistas autorizadas para esta clase');
+    error.code = 'UNAUTHORIZED_VTT_TRACK';
+    throw error;
+  }
+
+  return proof;
+};
+
+const inspectDocument = (document, pageUrl) => {
+  const identity = inspectClassIdentityDocument(document, pageUrl);
+  if (!identity) return { status: ACCESS_STATUS.UNKNOWN };
+
+  const payloads = [];
+  for (const script of document.querySelectorAll('script')) {
+    payloads.push(...parseNextFlightPushes(script.textContent || ''));
+  }
+
+  return {
+    status: identity.isFreePublic ? ACCESS_STATUS.FREE : ACCESS_STATUS.NOT_FREE,
+    classId: identity.classId,
+    classPosition: identity.classPosition,
+    className: identity.title,
+    courseId: identity.courseId,
+    courseName: identity.courseName,
+    pageUrl: identity.canonicalUrl,
+    vttUrls: extractCurrentMaterialVttUrls(payloads.join(''), identity.classId, identity.title),
   };
 };
 
@@ -277,15 +465,15 @@ export const assertPlatziFreeClassDocument = (document, pageUrl) => {
 };
 
 export const isFreeAccessProofForUrl = (proof, pageUrl, vttUrl) => (
-  proof?.status === ACCESS_STATUS.FREE
+  (proof?.status === ACCESS_STATUS.FREE || proof?.capabilities?.canExportSubtitles || proof?.capabilities?.canExport)
   && proof.pageUrl === normalizePageUrl(pageUrl)
   && Boolean(vttUrl)
-  && proof.vttUrls?.includes(normalizeVttUrl(vttUrl))
+  && (proof.authorizedVttUrls || proof.vttUrls)?.includes(normalizeVttUrl(vttUrl))
 );
 
 export const assertFreeAccessProofForUrl = (proof, pageUrl, vttUrl) => {
   if (!isFreeAccessProofForUrl(proof, pageUrl, vttUrl)) {
     throw createPlatziAccessError(proof?.accessStatus || ACCESS_STATUS.UNKNOWN);
   }
-  return proof;
+  return assertAuthorizedExportProof(proof, vttUrl);
 };

@@ -36,12 +36,20 @@ export const ExportPanel = () => {
     window.setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownloadTxt = () => {
-    downloadMergedTxt(exportableVideos, preferredLang === 'all' ? 'es' : preferredLang, courseInfo?.courseSlug);
+  const handleDownloadTxt = async () => {
+    try {
+      await downloadMergedTxt(exportableVideos, preferredLang === 'all' ? 'es' : preferredLang, courseInfo?.courseSlug);
+    } catch (error) {
+      useSubtitleStore.getState().setExtractionNotice(error.message);
+    }
   };
 
-  const handleDownloadZip = () => {
-    downloadZip(exportableVideos, preferredLang, courseInfo?.courseSlug);
+  const handleDownloadZip = async () => {
+    try {
+      await downloadZip(exportableVideos, preferredLang, courseInfo?.courseSlug);
+    } catch (error) {
+      useSubtitleStore.getState().setExtractionNotice(error.message);
+    }
   };
 
   return (

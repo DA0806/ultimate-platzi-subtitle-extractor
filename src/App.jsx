@@ -9,27 +9,16 @@ import { LanguageSelector } from './components/LanguageSelector';
 import { VideoList } from './components/VideoList';
 import { ProgressBar } from './components/ProgressBar';
 import { ExportPanel } from './components/ExportPanel';
-import { CookieTutorial } from './components/CookieTutorial';
 import { SetupWizard } from './components/SetupWizard';
 import { CourseWorkspaceSkeleton } from './components/CourseWorkspaceSkeleton';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { useI18n } from './i18n';
-import { useExtensionAuth } from './hooks/useExtensionAuth';
 
-const COOKIE_TUTORIAL_HASH = '#cookie-tutorial';
 const SETUP_HASH = '#setup';
 
 const getRoute = () => {
   const hash = window.location.hash;
-
-  if (hash.startsWith(COOKIE_TUTORIAL_HASH)) {
-    const params = new URLSearchParams(hash.split('?')[1] || '');
-    return {
-      view: 'tutorial',
-      context: params.get('context') === 'setup' ? 'setup' : 'tool',
-    };
-  }
 
   if (hash.startsWith(SETUP_HASH)) {
     const params = new URLSearchParams(hash.split('?')[1] || '');
@@ -47,10 +36,6 @@ const getRoute = () => {
 const setupHash = step => `${SETUP_HASH}?step=${step}&context=setup`;
 
 function App() {
-  const {
-    browserAccess,
-    useBrowserSession,
-  } = useExtensionAuth();
   const [route, setRoute] = useState(getRoute);
   const [isCourseLoading, setIsCourseLoading] = useState(false);
   const theme = useSettingsStore(state => state.theme);
@@ -86,13 +71,6 @@ function App() {
     root.classList.toggle('light', theme !== 'dark');
   }, [theme]);
 
-  const navigateToTutorial = (context = 'tool') => {
-    const nextHash = context === 'setup' ? `${COOKIE_TUTORIAL_HASH}?context=setup` : COOKIE_TUTORIAL_HASH;
-    if (window.location.hash !== nextHash) {
-      window.location.hash = nextHash;
-    }
-  };
-
   const navigateToSetup = step => {
     const nextHash = setupHash(step);
     if (window.location.hash !== nextHash) {
@@ -108,26 +86,12 @@ function App() {
     }
   };
 
-  if (route.view === 'tutorial') {
-    return (
-      <div className="min-h-screen overflow-x-hidden bg-background text-foreground transition-colors duration-state ease-motion">
-        <CookieTutorial
-          onBack={route.context === 'setup' ? () => navigateToSetup(3) : navigateToWorkspace}
-          isSetupContext={route.context === 'setup'}
-        />
-      </div>
-    );
-  }
-
   if (!hasCompletedSetup || route.view === 'setup') {
     return (
       <div className="min-h-screen overflow-x-hidden bg-background text-foreground transition-colors duration-state ease-motion">
         <SetupWizard
           step={route.step || 1}
-          browserAccess={browserAccess}
-          onUseBrowserSession={useBrowserSession}
           onStepChange={navigateToSetup}
-          onOpenTutorial={() => navigateToTutorial('setup')}
           onComplete={() => {
             completeSetup();
             navigateToWorkspace();
@@ -146,11 +110,7 @@ function App() {
         {t('app.skipContent')}
       </a>
 
-      <Header
-        onNavigateToTutorial={navigateToTutorial}
-        browserAccess={browserAccess}
-        onUseBrowserSession={useBrowserSession}
-      />
+      <Header />
       <ProgressBar />
 
       <main id="main-content" className="mx-auto w-full max-w-6xl px-4 pb-56 pt-8 sm:px-6 sm:pb-48 sm:pt-12 lg:px-8">

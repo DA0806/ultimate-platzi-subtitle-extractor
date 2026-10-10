@@ -9,6 +9,7 @@ import { useI18n } from '../i18n';
 export const VideoCard = ({ video, index }) => {
   const preferredLang = useSettingsStore(state => state.preferredLang);
   const updateVideo = useSubtitleStore(state => state.updateVideo);
+  const setExtractionNotice = useSubtitleStore(state => state.setExtractionNotice);
   const isExtracting = useSubtitleStore(state => state.isExtracting);
   const courseInfo = useSubtitleStore(state => state.courseInfo);
   const { t } = useI18n();
@@ -112,7 +113,13 @@ export const VideoCard = ({ video, index }) => {
             type="button"
             size="sm"
             variant="secondary"
-            onClick={() => downloadVideoTxt(video, preferredLang, courseInfo?.courseSlug, index)}
+            onClick={async () => {
+              try {
+                await downloadVideoTxt(video, preferredLang, courseInfo?.courseSlug, index);
+              } catch (error) {
+                setExtractionNotice(error.message);
+              }
+            }}
             aria-label={t('video.downloadAria', { title: video.title })}
           >
             <Download className="h-4 w-4" aria-hidden="true" />

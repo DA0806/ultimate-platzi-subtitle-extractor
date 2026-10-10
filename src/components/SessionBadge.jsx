@@ -1,37 +1,44 @@
-import { Globe2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, HelpCircle } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { useI18n } from '../i18n';
 import { useAuthStore } from '../store/authStore';
-import { isExtension } from '../utils/platziClient';
 
-export const SessionBadge = ({ cookie: propCookie }) => {
+export const SessionBadge = () => {
   const { t } = useI18n();
-  const storedCookie = useAuthStore(state => state.cookie);
-  const cookie = propCookie ?? storedCookie;
-  const isExt = isExtension();
-  const hasStoredCookie = Boolean(cookie?.trim() && !cookie.includes('mock_session_cookie'));
+  const sessionStatus = useAuthStore(state => state.sessionStatus);
 
-  if (isExt) {
+  if (sessionStatus === 'authenticated') {
     return (
-      <Badge variant="muted" className="gap-2" title={t('session.extensionTitle')}>
-        <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
-        {t('session.extensionMode')}
+      <Badge variant="success" className="gap-1.5" title={t('session.authenticated')}>
+        <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />
+        {t('session.authenticated')}
       </Badge>
     );
   }
 
-  if (!hasStoredCookie) {
+  if (sessionStatus === 'session_invalid') {
     return (
-      <Badge variant="muted" className="gap-2">
-        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" aria-hidden="true" />
+      <Badge variant="destructive" className="gap-1.5" title={t('extractionNotice.sessionInvalidated')}>
+        <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
         {t('session.none')}
       </Badge>
     );
   }
 
+  if (sessionStatus === 'unauthenticated') {
+    return (
+      <Badge variant="muted" className="gap-1.5" title={t('session.unauthenticated')}>
+        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" aria-hidden="true" />
+        {t('session.unauthenticated')}
+      </Badge>
+    );
+  }
+
+  // Default: unknown (distinto de unauthenticated)
   return (
-    <Badge variant="muted" className="gap-2" title={t('session.savedTitle')}>
-      {t('session.saved')}
+    <Badge variant="muted" className="gap-1.5" title={t('session.unknown')}>
+      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+      {t('session.unknown')}
     </Badge>
   );
 };

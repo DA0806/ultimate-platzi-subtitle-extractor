@@ -10,9 +10,7 @@ import { isExtension } from '../utils/platziClient';
 export const SetupWizard = ({
   step = 1,
   onStepChange,
-  onOpenTutorial,
   onComplete,
-  onUseBrowserSession,
 }) => {
   const { t } = useI18n();
   const isExt = isExtension();
@@ -20,7 +18,7 @@ export const SetupWizard = ({
   const steps = [
     { number: 1, label: t('setup.welcome') },
     { number: 2, label: t('setup.features') },
-    { number: 3, label: isExt ? t('setup.extraction') : t('setup.cookie') },
+    { number: 3, label: t('setup.extraction') },
   ];
 
   const stepCopy = {
@@ -36,19 +34,12 @@ export const SetupWizard = ({
       description: t('setup.featuresDescription'),
       icon: ListChecks,
     },
-    3: isExt
-      ? {
-          eyebrow: t('setup.extStep3Eyebrow'),
-          title: t('setup.extStep3Title'),
-          description: t('setup.extStep3Description'),
-          icon: Sparkles,
-        }
-      : {
-          eyebrow: t('setup.cookieEyebrow'),
-          title: t('setup.cookieTitle'),
-          description: t('setup.cookieDescription'),
-          icon: Sparkles,
-        },
+    3: {
+      eyebrow: t('setup.extStep3Eyebrow'),
+      title: t('setup.extStep3Title'),
+      description: t('setup.extStep3Description'),
+      icon: Sparkles,
+    },
   };
 
   const featureRows = [
@@ -246,7 +237,7 @@ export const SetupWizard = ({
                     </Card>
                   ) : (
                     <div className="space-y-4">
-                      <AuthPanel isOpen embedded onOpenTutorial={onOpenTutorial} onUseBrowserSession={onUseBrowserSession} />
+                      <AuthPanel isOpen embedded />
                     </div>
                   )}
                 </div>

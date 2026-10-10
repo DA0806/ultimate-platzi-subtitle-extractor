@@ -1,64 +1,87 @@
-# Política de privacidad de UPSE
+# Política de Privacidad de UPSE
 
-**Fecha de vigencia:** 6 de octubre de 2026  
+**Fecha de vigencia:** 10 de octubre de 2026
 **Producto:** Ultimate Platzi Subtitle Extractor (UPSE) 1.0.7, extensión local para navegadores Chromium
 **Contacto:** <https://github.com/DA0806/ultimate-platzi-subtitle-extractor/issues>
 
-Esta política describe el comportamiento de la extensión UPSE 1.0.7. Es una declaración del flujo implementado en este repositorio y no constituye asesoría legal ni una garantía de aprobación de Chrome Web Store.
+Esta política describe el tratamiento de datos y los principios de seguridad de la extensión UPSE 1.0.7. Constituye una declaración factual del código implementado en este repositorio y no representa asesoría legal ni garantía de aprobación en la Chrome Web Store.
 
-## Alcance
+---
 
-Esta política se refiere a la extensión cargada en Chrome, Edge u otro navegador basado en Chromium. El repositorio también contiene un modo web local para desarrollo que funciona de forma distinta: ese modo puede aceptar una cookie de Platzi introducida manualmente y guardarla en `platzi_session` para usar los proxies de Vite. Esa cookie manual no forma parte del flujo de la extensión empaquetada y se describe por separado en la guía del proyecto.
+## 1. Fundamentos y Fuentes Oficiales Consultadas
 
-## Qué procesa la extensión
+El diseño y las políticas de privacidad de UPSE 1.0.7 se basan en la documentación técnica y términos públicos oficiales siguientes:
 
-Cuando el usuario introduce una URL de curso o clase, la extensión procesa en memoria:
+1. **Platzi - Términos de Servicio:**
+   [`https://platzi.com/terminos/`](https://platzi.com/terminos/) — Establecen la propiedad sobre el contenido formativo y la prohibición de reproducción o distribución no autorizada.
+2. **Platzi - Centro de Ayuda:**
+   [`https://platzi.com/ayuda/`](https://platzi.com/ayuda/) — Documentación para estudiantes y usuarios de la plataforma sobre cursos y accesos.
+3. **Platzi - Soluciones para Empresas:**
+   [`https://platzi.com/business/`](https://platzi.com/business/) — Información de gestión organizacional que confirma la ausencia de APIs públicas abiertas de sesión personal para terceros.
+4. **Google Chrome Extensions - Ciclo de Vida en Manifest V3:**
+   [`https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle`](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle) — Especificación del ciclo de vida efímero de los Service Workers, el aislamiento de memoria y la persistencia restringida.
+5. **Google Chrome Web Store - User Data Policy:**
+   [`https://developer.chrome.com/docs/webstore/program-policies/user-data/`](https://developer.chrome.com/docs/webstore/program-policies/user-data/) — Principios de Propósito Único (Single Purpose), Mínimos Permisos (Minimum Permissions) y Uso Limitado (Limited Use).
 
-- la URL solicitada;
-- el HTML que Platzi devuelve para esa URL;
-- la metadata SSR de la clase (`class_id`, `class_position`, `course_id`, `class_name` y `class_is_free`) para confirmar que la página actual está marcada como gratuita;
-- las URLs VTT de subtítulos que Platzi entrega en el metadata del reproductor de la clase actual;
-- el contenido VTT descargado desde `static.platzi.com`;
-- el texto limpio, la selección de clases, estados de extracción y datos necesarios para crear TXT o ZIP.
+---
 
-Las solicitudes a Platzi salen desde el navegador del usuario. Platzi recibe la URL y los headers ordinarios de la petición, y devuelve el HTML o VTT al navegador. El navegador administra sus cookies y puede enviarlas a Platzi cuando `credentials: include` lo permite. UPSE no utiliza la API `chrome.cookies`, no lee valores de cookies, no construye encabezados `Cookie`, no copia tokens y no transmite credenciales a un servidor de UPSE.
+## 2. Alcance y Principio de Cero Recolección de Credenciales
 
-La extensión conserva preferencias propias, tema, idioma y el estado de finalización del setup en el almacenamiento local de la extensión. El contenido del curso y los subtítulos se mantienen en memoria mientras trabaja la página. Los archivos TXT y ZIP se generan mediante el navegador y quedan en la ubicación de descargas que controla el usuario; UPSE no los sube a un servidor.
+Esta política aplica tanto a la extensión cargada en el navegador como a la ejecución en entorno local. En UPSE 1.0.7:
+- **No se recopilan, almacenan ni transmiten contraseñas, tokens ni cookies.**
+- Se eliminaron completamente todas las opciones heredadas de captura manual de cookies (`Cookie`, `x-platzi-cookie`), formularios de inicio de sesión simulados y almacenes persistentes de sesión.
+- UPSE **no solicita ni utiliza la API `chrome.cookies`**, no lee `document.cookie`, no usa permisos de pestañas (`tabs`) y no inspecciona el tráfico de red mediante `webRequest`.
+- El manifiesto (`manifest.json`) declara estrictamente `permissions: []`.
 
-## Categorías de datos y finalidad
+---
 
-| Categoría | Datos involucrados | Finalidad | Tratamiento en UPSE |
-| --- | --- | --- | --- |
-| Contenido de sitios web | URLs de Platzi, HTML y VTT solicitados | Encontrar clases, subtítulos e idiomas | Procesamiento local en memoria; Platzi recibe las peticiones |
-| Actividad de navegación | Solo las URLs que el usuario pega o que se extraen del HTML solicitado | Realizar la extracción elegida | No usa la API de historial ni recopila el historial general |
-| Información de autenticación | Credenciales gestionadas por el navegador al solicitar Platzi | Permitir que Platzi aplique la sesión y permisos del perfil | Declaración conservadora por el uso de `credentials: include`; UPSE no lee, recolecta ni persiste los valores |
-| Preferencias | Tema, idioma y setup | Recordar la configuración de la extensión | Almacenamiento local de la extensión |
-| Archivos exportados | TXT o ZIP elegidos por el usuario | Entregar el resultado solicitado | Creación y descarga local; no se envían a UPSE |
+## 3. Tratamiento de Datos en Memoria y Ciclo de Vida MV3
 
-UPSE solo busca o descarga VTT cuando la clase actual está marcada explícitamente como gratuita por Platzi. Una clase marcada como no gratuita o con metadata desconocida se bloquea antes de solicitar VTT. UPSE no solicita pagos, no vende datos, no tiene cuentas propias, no tiene telemetría ni analytics propios y no mantiene un backend para almacenar contenido o credenciales. No se implementa login contra Platzi con correo y contraseña; una sesión de pago no se valida desde UPSE.
+Cuando el usuario ingresa una URL de curso o clase de Platzi, UPSE procesa exclusivamente en memoria volátil:
+1. **Identidad Canónica (`ClassIdentityMetadata`):** Resolución de URLs, slugs, identificadores numéricos y títulos `<h1>` mediante el HTML devuelto por Platzi, desacoplada por completo de cualquier stream protegido o reproductor multimedia.
+2. **Evaluación de Capacidades (`CapabilityDecision`):** Verificación de triple permiso (`authenticated`, `canView`, `canExportSubtitles`) mediante un adaptador oficial construido explícitamente. `class_is_free`, `user`, `sessionStatus` y el consentimiento local nunca sustituyen esa fuente. En ausencia de ella, el sistema falla cerrado por defecto (`DENY`).
+3. **Pruebas de Acceso Efímeras (`AuthorizedAccessProof`):** Objetos de autorización creados en el heap de la pestaña de la extensión con un tiempo de vida (TTL) máximo de 10 minutos, enlazados estructuralmente a la URL canónica y a la lista blanca de pistas VTT.
+4. **Subtítulos y Formatos de Exportación:** Solo una decisión oficial vigente puede habilitar la descarga de VTTs desde `static.platzi.com` y su transformación local a TXT o ZIP; el adaptador predeterminado permanece en `UNKNOWN`.
 
-## Recursos de terceros
+### Suspensión del Service Worker y Purga de Seguridad
+Conforme a la especificación de Manifest V3, el Service Worker de fondo no retiene estado de autorización ni pruebas de acceso. Todas las pruebas residen exclusivamente en la memoria de la ventana activa.
+- Si la ventana o pestaña se cierra o recarga, **todas las pruebas y contenidos extraídos se destruyen de inmediato**.
+- Ante cualquier respuesta HTTP `401 Unauthorized` o `403 Forbidden` devuelta por Platzi, UPSE incrementa automáticamente su contador de época (`sessionEpoch`), revoca todas las pruebas en memoria y ejecuta `purgeExtractedContent()`, eliminando de inmediato los textos extraídos para evitar cualquier retención o mezcla de datos entre diferentes sesiones.
 
-La hoja de estilos puede solicitar fuentes desde Google Fonts (`fonts.googleapis.com` y `fonts.gstatic.com`). El tutorial opcional puede solicitar un video desde Cloudinary. Son recursos web de la interfaz, no código ejecutable remoto ni un canal para enviar los subtítulos extraídos. Esos proveedores pueden recibir metadatos ordinarios de la solicitud, como IP, navegador y URL de referencia, y los tratan conforme a sus propias políticas; UPSE no controla sus registros.
+---
 
-La extensión no descarga JavaScript remoto, no ejecuta código remoto y no usa un servidor intermediario propio. Las únicas solicitudes operativas de extracción están restringidas por el manifest a `https://platzi.com`, `https://www.platzi.com` y `https://static.platzi.com`.
+## 4. Categorías de Datos y Finalidad
 
-## Retención, limpieza y desinstalación
+| Categoría | Datos Involucrados | Finalidad | Tratamiento en UPSE |
+| :--- | :--- | :--- | :--- |
+| **Contenido de sitios web** | URLs de Platzi, HTML SSR y pistas VTT | Catalogar temarios y extraer subtítulos solicitados por el usuario | Procesamiento exclusivo en memoria local del navegador. No se envía a ningún servidor de UPSE. |
+| **Historial web** | Solo la URL introducida por el usuario | Cargar la estructura de la clase o curso elegido | No se utiliza la API de historial ni se recopila navegación externa. |
+| **Información de autenticación** | Sesión del navegador transmitida por `credentials: 'include'` | Permitir que el servidor de Platzi resuelva la petición con el perfil del usuario | Declaración conservadora para Chrome Web Store. UPSE no lee, no intercepta y no persiste cookies ni tokens. |
+| **Preferencias locales** | Tema visual, idioma de UI y estado del tutorial | Recordar la configuración de visualización de la interfaz | Almacenamiento local mediante `chrome.storage.local` / `localStorage` (`platzi_settings`). Cero datos personales. |
+| **Archivos exportados** | Archivos TXT y ZIP generados | Entregar al usuario las transcripciones solicitadas | Generación local y descarga en el sistema de archivos del usuario. |
 
-- La memoria de extracción se pierde al recargar o cerrar la pestaña de UPSE.
-- Las preferencias permanecen en el almacenamiento local de la extensión hasta que el usuario pulsa **Borrar datos de UPSE**, limpia los datos del sitio o desinstala la extensión.
-- La limpieza interna elimina solo las claves propias `platzi_session` y `platzi_settings`, incluyendo restos heredados de versiones con autenticación manual. No elimina cookies de Platzi, no cierra la sesión del usuario, no borra el historial y no elimina archivos exportados.
-- Los TXT y ZIP descargados se conservan según la configuración de descargas del navegador. El usuario debe eliminarlos desde su sistema si ya no los necesita.
-- Al desinstalar la extensión, el navegador gestiona la eliminación del almacenamiento de la extensión. La sesión de Platzi y los archivos descargados pertenecen al navegador y al sistema del usuario y no son eliminados por UPSE.
+---
 
-## Seguridad y uso autorizado
+## 5. Recursos Externos de Terceros
 
-El usuario debe mantener su navegador y su cuenta protegidos, usar la extensión solo con contenido al que tenga derecho de acceso y respetar los términos de Platzi, los derechos de autor y las medidas de seguridad del sitio. UPSE no intenta evadir MFA, DRM, paywalls, límites de solicitudes ni controles de autorización. Un error `401` o `403` se muestra como resultado de Platzi y no se transforma en una validación de suscripción. La guardia de clase gratuita no certifica derechos de exportación ni el acceso de una cuenta de pago.
+- **Fuentes tipográficas:** La hoja de estilos puede referenciar fuentes desde Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`).
+- **Video explicativo opcional:** El tutorial puede cargar un video descriptivo alojado en Cloudinary.
+- **Restricción de hosts:** Las peticiones funcionales de extracción están estrictamente acotadas por el manifiesto a `https://platzi.com/*`, `https://www.platzi.com/*` y `https://static.platzi.com/*`.
+- UPSE no contiene código JavaScript remoto ni descarga scripts ejecutables externos.
 
-## Compromiso con las políticas de Chrome Web Store
+---
 
-UPSE se mantendrá conforme a la [Chrome Web Store User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/user-data/), incluidos los principios de Limited Use. Si cambia el propósito, los hosts o el tratamiento de datos, se actualizarán el producto, la ficha y esta política antes de una nueva publicación.
+## 6. Retención, Limpieza y Derechos del Usuario
 
-## Cambios y contacto
+- **Memoria volátil:** El contenido de subtítulos extraídos y las pruebas de acceso se purgan automáticamente al cerrar la pestaña, al cambiar de cuenta o al detectar errores de autorización (401/403).
+- **Borrado voluntario:** El botón **Borrar datos de UPSE** en los Ajustes elimina las preferencias locales almacenadas (`platzi_settings`). No altera las cookies de Platzi en el navegador ni los archivos previamente descargados por el usuario.
+- **Desinstalación:** Al desinstalar la extensión desde el navegador, se eliminan todos los datos locales asociados a la extensión.
 
-Si el flujo de datos cambia, esta política deberá actualizarse junto con la versión correspondiente de la extensión. Para preguntas o reportar un problema, usa <https://github.com/DA0806/ultimate-platzi-subtitle-extractor/issues>. No incluyas cookies, tokens ni contenido privado en un reporte.
+---
+
+## 7. Declaración de Cumplimiento de Chrome Web Store
+
+UPSE 1.0.7 se diseñó siguiendo las políticas de uso limitado (Limited Use); esta declaración describe el código local y no sustituye una revisión o aprobación externa:
+1. **No comercialización:** Los datos no se venden ni se transfieren a terceros bajo ningún concepto.
+2. **Propósito único estricto:** Los datos se utilizan única y exclusivamente para proveer la funcionalidad de extracción de subtítulos de libre acceso iniciada por el usuario.
+3. **Sin evaluación crediticia ni publicidad:** UPSE no recopila datos para perfiles comerciales, evaluación crediticia, publicidad ni telemetría.

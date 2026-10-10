@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
 import { FileText, Settings } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
 import { Button } from './ui/Button';
 import { SessionBadge } from './SessionBadge';
 import { AuthPanel } from './AuthPanel';
@@ -8,8 +7,7 @@ import { useI18n } from '../i18n';
 
 const HEADER_ACTION_CLASS = 'border border-border/90 bg-card/80 text-foreground hover:border-primary/50 hover:bg-card hover:!text-foreground';
 
-export const Header = ({ onNavigateToTutorial, browserAccess, onUseBrowserSession }) => {
-  const cookie = useAuthStore(state => state.cookie);
+export const Header = () => {
   const { t } = useI18n();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const sessionButtonRef = useRef(null);
@@ -28,7 +26,7 @@ export const Header = ({ onNavigateToTutorial, browserAccess, onUseBrowserSessio
               <p className="truncate text-xs text-muted-foreground">{t('header.subtitle')}</p>
             </div>
             <div className="ml-3 hidden border-l border-border pl-4 sm:block">
-              <SessionBadge cookie={cookie} browserAccess={browserAccess} />
+              <SessionBadge />
             </div>
           </div>
 
@@ -52,9 +50,7 @@ export const Header = ({ onNavigateToTutorial, browserAccess, onUseBrowserSessio
       <AuthPanel
         isOpen={isAuthOpen}
         onClose={handleCloseAuth}
-        onOpenTutorial={onNavigateToTutorial}
         triggerRef={sessionButtonRef}
-        onUseBrowserSession={onUseBrowserSession}
       />
     </>
   );

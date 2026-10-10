@@ -1,30 +1,31 @@
-import { useMutation } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
-import { loginWithCredentials } from '../utils/platziAuth';
+import { defaultAuthorizationService } from '../utils/authorizationService.js';
 
 export const useAuth = () => {
-  const loginFn = useAuthStore(state => state.login);
-  const logoutFn = useAuthStore(state => state.logout);
+  const sessionStatus = useAuthStore(state => state.sessionStatus);
+  const setSessionStatus = useAuthStore(state => state.setSessionStatus);
+  const invalidateSession = useAuthStore(state => state.invalidateSession);
+  const logout = useAuthStore(state => state.logout);
 
-  const loginMutation = useMutation({
-    mutationFn: async ({ email, password }) => {
-      return await loginWithCredentials(email, password);
-    },
-    onSuccess: (data) => {
-      loginFn(data.token, data.cookie, data.user);
+  const recheckSession = async () => {
+    try {
+      const result = await defaultAuthorizationService.adapter.checkSession();
+      if (result?.status === 'verified' && result.authenticated === true && result.accountId && Number.isInteger(result.sessionEpoch) && Number.isFinite(result.expiresAt) && result.expiresAt > Date.now() && result.sessionEpoch === useAuthStore.getState().sessionEpoch) {
+        setSessionStatus('authenticated');
+        return result;
+      }
+      invalidateSession();
+      return result;
+    } catch {
+      invalidateSession();
+      return null;
     }
-  });
-
-  const loginWithCookie = (cookieStr) => {
-    // Saving a cookie locally does not prove that the session is active.
-    loginFn(null, cookieStr, null);
   };
 
   return {
-    login: loginMutation.mutateAsync,
-    loginWithCookie,
-    logout: logoutFn,
-    isLoading: loginMutation.isPending,
-    error: loginMutation.error
+    sessionStatus,
+    recheckSession,
+    invalidateSession,
+    logout,
   };
 };

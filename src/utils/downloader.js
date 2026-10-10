@@ -1,8 +1,56 @@
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
-import { mergeSubtitles } from './textMerger';
+import fileSaver from 'file-saver';
+import { mergeSubtitles } from './textMerger.js';
+import { useAuthStore } from '../store/authStore.js';
+import { assertAuthorizedExportProof } from './platziAccess.js';
+import { defaultAuthorizationService } from './authorizationService.js';
 
-export const downloadVideoTxt = (video, targetLang, courseSlug, index) => {
+const saveAs = fileSaver?.saveAs || fileSaver;
+
+export const assertExportPreflight = () => {
+  const sessionStatus = useAuthStore?.getState?.()?.sessionStatus;
+  if (sessionStatus !== 'authenticated') {
+    const error = new Error('No se puede exportar: la sesión de Platzi ha sido invalidada. Abre platzi.com y vuelve a verificar.');
+    error.code = sessionStatus === 'session_invalid'
+      ? 'SESSION_INVALIDATED_CANNOT_EXPORT'
+      : 'AUTHORIZATION_RECHECK_REQUIRED';
+    throw error;
+  }
+};
+
+const revalidateExportPreflight = async (videos = []) => {
+  assertExportPreflight();
+  const currentEpoch = useAuthStore.getState().sessionEpoch;
+  for (const video of videos) {
+    const proof = video?.authorizationProof;
+    if (!proof) {
+      const error = new Error('La autorización de esta clase no está disponible o debe verificarse de nuevo.');
+      error.code = 'AUTHORIZATION_RECHECK_REQUIRED';
+      throw error;
+    }
+    if (proof.authorizedVttUrls?.[0]) {
+      assertAuthorizedExportProof(proof, proof.authorizedVttUrls[0], { currentSessionEpoch: currentEpoch });
+    } else if (proof.capabilities?.verified !== true) {
+      const error = new Error('La autorización de esta clase no está verificada.');
+      error.code = 'AUTHORIZATION_RECHECK_REQUIRED';
+      throw error;
+    }
+    const identity = proof.identity || {
+      courseId: proof.courseId,
+      classId: proof.classId,
+      canonicalUrl: proof.canonicalUrl,
+    };
+    const decision = await defaultAuthorizationService.recheck(identity);
+    if (!decision.verified || decision.accountId !== proof.sessionAccount || decision.sessionEpoch !== currentEpoch) {
+      const error = new Error('La autorización de exportación ya no es válida.');
+      error.code = 'AUTHORIZATION_RECHECK_FAILED';
+      throw error;
+    }
+  }
+};
+
+export const downloadVideoTxt = async (video, targetLang, courseSlug, index) => {
+  await revalidateExportPreflight([video]);
   if (!video?.extractedContent) return;
 
   const fallbackLang = Object.keys(video.extractedContent)[0];
@@ -19,7 +67,8 @@ export const downloadVideoTxt = (video, targetLang, courseSlug, index) => {
   saveAs(blob, `${safeCourse}-clase-${numStr}-${safeSlug}.${selectedLang}.txt`);
 };
 
-export const downloadMergedTxt = (videos, targetLang, courseSlug) => {
+export const downloadMergedTxt = async (videos, targetLang, courseSlug) => {
+  await revalidateExportPreflight(videos);
   const mergedText = mergeSubtitles(videos, targetLang);
   if (!mergedText) return;
 
@@ -28,6 +77,7 @@ export const downloadMergedTxt = (videos, targetLang, courseSlug) => {
 };
 
 export const downloadZip = async (videos, targetLang, courseSlug) => {
+  await revalidateExportPreflight(videos);
   const zip = new JSZip();
 
   const isAllLangs = targetLang === 'all';
@@ -65,5 +115,6 @@ export const downloadZip = async (videos, targetLang, courseSlug) => {
   });
 
   const content = await zip.generateAsync({ type: 'blob' });
+  await revalidateExportPreflight(videos);
   saveAs(content, `${courseSlug || 'subtitulos'}.zip`);
 };

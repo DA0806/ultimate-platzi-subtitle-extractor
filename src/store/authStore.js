@@ -1,8 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { isExtension } from '../utils/platziClient.js';
+import { useSubtitleStore } from './subtitleStore.js';
 
-const EXTENSION_TOKEN = 'ext_browser_session';
+const LEGACY_SESSION_KEY = 'platzi_session';
 
 const safeExtensionUser = (user) => user && ({
   name: user.name,
@@ -10,64 +9,50 @@ const safeExtensionUser = (user) => user && ({
   isBrowserAccess: Boolean(user.isBrowserAccess),
 });
 
-export const useAuthStore = create(
-  persist(
-    (set) => ({
+// Remove the legacy key without reading its contents. Session authority is never persisted.
+try {
+  globalThis.localStorage?.removeItem(LEGACY_SESSION_KEY);
+} catch {
+  // Storage can be unavailable in private or extension contexts.
+}
+
+export const useAuthStore = create((set) => ({
+  sessionEpoch: 0,
+  sessionStatus: 'unknown',
+  token: null,
+  cookie: null,
+  user: null,
+
+  invalidateSession: () => {
+    set((state) => ({
+      sessionEpoch: (state.sessionEpoch || 0) + 1,
+      sessionStatus: 'session_invalid',
       token: null,
       cookie: null,
-      user: null, // Optional identity returned by a real authentication provider
-      
-      login: (token, cookie, user) => set({
-        token: isExtension() ? EXTENSION_TOKEN : token,
-        cookie: isExtension() ? null : cookie,
-        user,
-      }),
-      
-      logout: () => set({ token: null, cookie: null, user: null }),
-      
-      updateUser: (user) => set((state) => ({ user: { ...state.user, ...user } })),
-    }),
-    {
-      name: 'platzi_session',
-      partialize: (state) => isExtension()
-        ? { token: state.token === EXTENSION_TOKEN ? EXTENSION_TOKEN : null, cookie: null, user: safeExtensionUser(state.user) }
-        : { token: state.token, cookie: state.cookie, user: state.user },
-      version: 1,
-      migrate: (persistedState) => isExtension()
-        ? {
-          token: persistedState?.token === EXTENSION_TOKEN ? EXTENSION_TOKEN : null,
-          cookie: null,
-          user: safeExtensionUser(persistedState?.user),
-        }
-        : persistedState,
-      merge: (persistedState, currentState) => {
-        if (!isExtension()) {
-          return { ...currentState, ...persistedState };
-        }
+    }));
+    useSubtitleStore.getState().purgeExtractedContent();
+  },
 
-        const persistedUser = persistedState?.user;
-        return {
-          ...currentState,
-          token: persistedState?.token === EXTENSION_TOKEN ? EXTENSION_TOKEN : null,
-          cookie: null,
-          user: safeExtensionUser(persistedUser),
-        };
-      },
-      onRehydrateStorage: () => (state) => {
-        if (!isExtension() || typeof localStorage === 'undefined') return;
-        try {
-          localStorage.setItem('platzi_session', JSON.stringify({
-            state: {
-              token: state?.token === EXTENSION_TOKEN ? EXTENSION_TOKEN : null,
-              cookie: null,
-              user: safeExtensionUser(state?.user),
-            },
-            version: 1,
-          }));
-        } catch {
-          // Ignore unavailable browser storage; credentials stay out of memory.
-        }
-      },
-    }
-  )
-);
+  setSessionStatus: (sessionStatus) => set({ sessionStatus }),
+
+  // Kept as a display compatibility action; its arguments never grant authority.
+  login: (_token, _cookie, user) => set({
+    token: null,
+    cookie: null,
+    user: safeExtensionUser(user),
+    sessionStatus: 'unknown',
+  }),
+
+  logout: () => {
+    set((state) => ({
+      token: null,
+      cookie: null,
+      user: null,
+      sessionStatus: 'unauthenticated',
+      sessionEpoch: (state.sessionEpoch || 0) + 1,
+    }));
+    useSubtitleStore.getState().purgeExtractedContent();
+  },
+
+  updateUser: (user) => set((state) => ({ user: { ...state.user, ...safeExtensionUser(user) } })),
+}));

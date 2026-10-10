@@ -50,9 +50,6 @@ export default defineConfig({
             'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
           };
 
-          if (req.headers['x-platzi-cookie']) {
-            requestHeaders.Cookie = req.headers['x-platzi-cookie'];
-          }
           if (req.headers['x-proxy-referer']) {
             requestHeaders.Referer = req.headers['x-proxy-referer'];
           }
@@ -105,13 +102,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/platzi/, ''),
         configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq, req) => {
+          proxy.on('proxyReq', (proxyReq) => {
             proxyReq.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
             proxyReq.setHeader('Accept-Language', 'es-ES,es;q=0.9,en;q=0.8');
             proxyReq.setHeader('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
-            if (req.headers['x-platzi-cookie']) {
-              proxyReq.setHeader('Cookie', req.headers['x-platzi-cookie']);
-            }
           });
         },
         followRedirects: true

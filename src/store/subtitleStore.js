@@ -34,6 +34,14 @@ export const useSubtitleStore = create((set) => ({
   }),
 
   stopExtraction: () => set({ isExtracting: false }),
+
+  purgeExtractedContent: () => set((state) => ({
+    videos: state.videos.map(v => ({
+      ...v,
+      extractedContent: {},
+      status: v.status === 'ready' ? 'pending' : v.status,
+    })),
+  })),
   
   reset: () => set({
     videos: [],

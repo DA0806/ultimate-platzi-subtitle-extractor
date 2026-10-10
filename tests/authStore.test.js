@@ -13,7 +13,7 @@ afterEach(() => {
   globalThis.window = originalWindow;
 });
 
-test('rewrites legacy extension storage without cookie or token values', async () => {
+test('purges legacy extension storage without reading or rewriting its value', async () => {
   const values = new Map([
     ['platzi_session', JSON.stringify({
       state: { token: 'legacy-secret-token', cookie: 'sessionid=legacy-secret', user: { email: 'old@example.test' } },
@@ -23,20 +23,15 @@ test('rewrites legacy extension storage without cookie or token values', async (
   globalThis.location = { protocol: 'chrome-extension:' };
   globalThis.chrome = { runtime: { id: 'test-extension' } };
   globalThis.localStorage = {
-    getItem: key => values.get(key) ?? null,
-    setItem: (key, value) => values.set(key, value),
+    getItem: () => { throw new Error('legacy session must not be read'); },
+    setItem: () => { throw new Error('legacy session must not be rewritten'); },
     removeItem: key => values.delete(key),
   };
   globalThis.window = { localStorage: globalThis.localStorage };
 
   const { useAuthStore } = await import(`../src/store/authStore.js?legacy-${Date.now()}`);
-  await new Promise(resolve => setTimeout(resolve, 25));
   const { isExtension } = await import('../src/utils/platziClient.js');
   assert.equal(isExtension(), true);
   assert.equal(useAuthStore.getState().cookie, null);
-  const persisted = JSON.parse(values.get('platzi_session'));
-
-  assert.equal(persisted.state.cookie, null);
-  assert.equal(persisted.state.token, null);
-  assert.equal(persisted.state.user.email, 'old@example.test');
+  assert.equal(values.has('platzi_session'), false);
 });
