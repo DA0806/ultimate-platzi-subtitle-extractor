@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore.js';
 import { getSessionValidityDeadline } from './sessionDeadline.js';
 import { getVersionInfo } from './version.js';
 
-export const SESSION_USER_ENDPOINT = 'https://api.platzi.com/api/v1/components/header/v2/user/';
+export const SESSION_USER_ENDPOINT = 'https://api.platzi.com/api/v1/components/headerv2/user/';
 export const OBSERVATION_TTL_MS = 30_000;
 
 export const buildSanitizedDiagnostic = ({
@@ -37,7 +37,7 @@ export const buildSanitizedDiagnostic = ({
     environment: environment === 'extension' ? 'extension' : 'web_other',
     codeVersion: versionInfo.codeVersion,
     manifestVersion: versionInfo.manifestVersion,
-    endpointHint: 'header/v2/user/',
+    endpointHint: 'headerv2/user/',
     method: 'GET',
     httpStatus: validHttpStatus,
     responseKind: validResponseKind,
@@ -305,7 +305,7 @@ export class PlatziSessionAdapter {
         const respUrl = new URL(response.url);
         urlExactMatch = (
           respUrl.origin === 'https://api.platzi.com'
-          && respUrl.pathname === '/api/v1/components/header/v2/user/'
+          && respUrl.pathname === '/api/v1/components/headerv2/user/'
           && respUrl.search === ''
           && respUrl.hash === ''
         );

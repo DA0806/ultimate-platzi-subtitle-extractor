@@ -441,3 +441,51 @@ No se identificó en las fuentes públicas consultadas un OAuth/PKCE de consumid
 | Tests locales | **PASS** | 111/111 sobre fixtures/mocks/local; lint y build exit 0. No sustituyen E2E de Edge. |
 
 **Conclusión:** el MCP probó conectividad con el Edge real y observó una sesión visible de Platzi, recursos de la clase con HTTP 200 y UPSE 1.0.8 instalada. No confirmó una causa única del HTTP 404 ni una solución autorizada. La investigación queda limitada por la categoría de extensiones deshabilitada; no se modificó código, autenticación, versión o permisos.
+
+## Fase inicial: MCP de extensiones mediante pipe (antes del inicio manual de sesión)
+
+La prueba con el servidor separado `edge-extensions` confirmó una configuración de extensiones válida: `--categoryExtensions=true`, conexión mediante pipe, ejecutable de Microsoft Edge y perfil independiente. No se observaron `autoConnect`, `browserUrl` ni `wsEndpoint`. La instancia de pruebas inició correctamente; `list_pages`, una navegación de prueba y la evaluación segura del agente de usuario confirmaron Edge (`isEdge: true`). La conexión anterior mediante `autoConnect` queda como evidencia histórica del bloqueo y no describe esta instancia nueva.
+
+Las herramientas `list_extensions`, `install_extension`, `reload_extension` y `trigger_extension_action` estuvieron disponibles. El intento de instalar desde el `dist` del worktree fue rechazado por las raíces permitidas del MCP antes de CDP. La fuente oficial de Chrome DevTools MCP documenta que `roots()` incluye siempre `os.tmpdir()` en `McpContext.ts` ([fuente](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/src/McpContext.ts)); el rechazo observado no permite inferir la causa exacta de la ausencia de otras raíces del cliente. Después de copiar el artefacto a una carpeta nueva bajo el temp del runtime, `install_extension` completó. `list_extensions` mostró UPSE `1.0.8` habilitada; `reload_extension` y `trigger_extension_action` pasaron, y se inspeccionó la página `chrome-extension:`. `list_pages` mostró el service worker activo, que no se inspeccionó internamente. La copia staged fue comprobada con un manifiesto SHA-256 de 11 archivos sin symlinks; la igualdad parcial de hashes del artefacto instalado se detalla a continuación.
+
+La matriz anterior conserva el resultado del intento histórico mediante `autoConnect`; la continuación actual con `edge-extensions` demuestra que la inspección de `chrome-extension:` ya es posible mediante pipe.
+
+La inspección de recursos propios de la página confirmó la igualdad de los artefactos instalados relevantes: `index.html` `8ffc440e3069186eae9eaf737d3da3096fecffb0c7338e93be83a21cce0658c4`, `manifest.json` `5975bfcd2d5254372527f0ba7cf32ef1fb2f24bda82970c8ac4323c4faa0f551` y `assets/index-v4LOepD8.js` `978aa018c7e82b02ec9ab585be3473e728f292a10d64412e218ac55fd9fb1eb2`. Estos valores coinciden con la copia staged del `dist`. No se leyeron recursos ni cabeceras con credenciales.
+
+En esa fase el perfil de pruebas todavía no tenía sesión de Platzi. Se solicitó al usuario iniciar sesión manualmente en `https://platzi.com/`. No se le pidieron cookies, tokens ni credenciales, y no se leyeron ni almacenaron. En esa fase la prueba de **Volver a verificar**, Network, errores de consola, diagnóstico de aplicación y comparación del HTTP `404` aún no se había ejecutado; el resultado final tras el inicio manual se registra abajo. El acceso a clase y la exportación seguían protegidos y fail-closed.
+
+El onboarding también confirmó la ruta de usuario con **Empezar**, **Siguiente** y **Entrar workspace**; el botón **Ajustes** abrió su vista, donde fueron visibles el código/manifest de versión 1.0.8 y **Volver a verificar**. En esa fase la inspección de UI todavía no ejecutó el recheck porque faltaba el inicio manual; el resultado final se registra abajo.
+
+| Escenario | Estado | Evidencia nueva |
+| :--- | :--- | :--- |
+| MCP de extensiones, pipe y perfil independiente | **PASS** | Categoría habilitada; sin `autoConnect`, `browserUrl` ni `wsEndpoint`; Edge iniciado. |
+| Herramientas de gestión de extensiones | **PASS** | Las cuatro operaciones requeridas estuvieron disponibles. |
+| Instalar UPSE desde carpeta temporal permitida | **PASS** | UPSE `1.0.8` figura habilitada; recarga y acción abrieron la página; el service worker quedó listado activo sin inspección interna. |
+| Inspeccionar `chrome-extension:` | **PASS** | Página de UPSE abierta y snapshot de onboarding obtenido. |
+| Igualdad del bundle instalado | **PASS parcial** | Hashes confirmados para `index.html`, `manifest.json` y `assets/index-v4LOepD8.js`; no se infiere igualdad de recursos no inspeccionados. |
+| Sesión legítima de Platzi | **FASE INICIAL** | En esa fase faltaba el inicio manual del usuario en el mismo perfil de pruebas; el resultado final se registra abajo. |
+| Recheck y explicación del HTTP `404` | **FASE INICIAL** | En esa fase todavía no se ejecutó; el resultado final se registra abajo con observación directa. |
+
+## Resultado final E2E con UPSE 1.0.9
+
+Esta sección registra la prueba posterior al inicio manual de sesión en el mismo perfil independiente. La evidencia histórica de UPSE 1.0.8 y su `404` se conserva arriba sin reinterpretarla.
+
+`edge-extensions` instaló y habilitó UPSE `1.0.9`; la UI mostró código y manifest `1.0.9`. El clic real en **Volver a verificar** mostró el estado `Verificando sesión…` y terminó con **Sesión activa detectada** y motivo `OK`. Network registró `GET https://api.platzi.com/api/v1/components/headerv2/user/` con HTTP `200` y respuesta `application/json`; no hubo redirección. La validación exacta de `response.url` la realizaron el adaptador y las pruebas locales; no se leyó `get_network_request` ni cabeceras desde el MCP. El esquema observado incluyó solo los tipos `isAuthenticated` booleano y `userId` numérico; no se leyó ni almacenó el valor de `userId`, cookies, tokens ni cabeceras sensibles.
+
+Una sonda GET previa, ejecutada con el contexto 1.0.8 y las mismas opciones `credentials: include`, `redirect: error`, `cache: no-store` y `Accept: application/json`, sin cabeceras internas, observó HTTP `200` JSON, sin redirección y solo tipos de esquema (`isAuthenticated` booleano y `userId` numérico). Esta evidencia de la ruta correcta se mantiene separada de la autenticación UI 1.0.9 posterior.
+
+Un segundo clic controlado generó una segunda solicitud única al mismo endpoint y volvió a recibir `200` JSON, sin duplicación de diagnóstico ni error de aplicación. La comparación A/B en el mismo perfil confirma la causa de la regresión: la UI 1.0.8 observó dos solicitudes a la ruta obsoleta `/api/v1/components/header/v2/user/` con `404`, mientras que la UI 1.0.9 observó dos solicitudes a `/api/v1/components/headerv2/user/` con `200`. La identidad de sesión queda confirmada por la respuesta autoritativa y la UI; clase, reproducción y exportación siguen sin autorización y permanecen `UNKNOWN`/fail-closed.
+
+La consola de la instancia 1.0.9 registró una incidencia de historial y cero errores o advertencias; no hubo crash de aplicación.
+
+| Caso | Estado | Evidencia real nueva |
+| :--- | :--- | :--- |
+| UPSE instalada, habilitada y versión sincronizada | **PASS** | `list_extensions` y UI: código/manifest `1.0.9`. |
+| Recheck desde UI | **PASS** | Spinner visible; termina en **Sesión activa detectada**, motivo `OK`. |
+| Endpoint oficial observado en la página | **PASS** | `/api/v1/components/headerv2/user/`; HTTP `200`, JSON y esquema sanitizado. |
+| Validación exacta de respuesta | **PASS** | El adaptador y las pruebas locales validan `response.url` exacta y rechazan query/hash; no se leyó `get_network_request` ni cabeceras desde el MCP. |
+| Recheck repetido | **PASS** | Segundo GET `200` único; sin duplicación de diagnóstico ni crash de aplicación. |
+| Comparación de la regresión | **PASS** | Ruta obsoleta 1.0.8: `404`; ruta `headerv2` en 1.0.9: `200`, mismo perfil. |
+| Permiso de clase y exportación | **NOT TESTED / UNKNOWN** | No hubo dataset autorizado para E2E; `UNKNOWN` permanece impuesto por código y pruebas locales, sin prueba server-side de clase/exportación. |
+| Validación local | **PASS** | 112/112 tests; lint y build exit 0; manifest/package/version 1.0.9 sincronizados; diff check PASS. |
+| Secretos y datos personales en diff | **PASS** | No aparecen valores de usuario, IDs de extensión, cookies ni tokens. |

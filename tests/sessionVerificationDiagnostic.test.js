@@ -33,7 +33,7 @@ afterEach(() => {
 
 const enableExtensionMode = () => {
   globalThis.location = { protocol: 'chrome-extension:' };
-  globalThis.chrome = { runtime: { id: 'test-extension-upse', getManifest: () => ({ version: '1.0.8' }) } };
+  globalThis.chrome = { runtime: { id: 'test-extension-upse', getManifest: () => ({ version: '1.0.9' }) } };
 };
 
 test('RED proof 1: authStore exposes isVerifying and lastDiagnostic, and clears them on logout/invalidate', () => {
@@ -79,8 +79,8 @@ test('RED proof 1b: SSR-rendered AuthPanel exposes pending verification and disa
     assert.match(markup, /role="status"/);
     assert.match(markup, /aria-live="polite"/);
     assert.match(markup, /disabled=""/);
-    assert.match(markup, /Versión de código: 1\.0\.8/);
-    assert.match(markup, /manifest: 1\.0\.8/);
+    assert.match(markup, /Versión de código: 1\.0\.9/);
+    assert.match(markup, /manifest: 1\.0\.9/);
 
     const fixtureState = globalThis.__upseSessionUiFixtureState;
     fixtureState.isVerifying = false;
@@ -149,7 +149,7 @@ test('RED proof 2: HTTP 404 empty body sets lastDiagnostic with responseKind emp
   globalThis.fetch = async () => ({
     ok: false,
     status: 404,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => '   ',
   });
@@ -220,7 +220,7 @@ test('RED proof 4: concurrent requests: older request completing while newer is 
   resolveFirst({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       isAuthenticated: true,
@@ -240,7 +240,7 @@ test('RED proof 4: concurrent requests: older request completing while newer is 
   resolveSecond({
     ok: false,
     status: 404,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map(),
     text: async () => '',
   });
@@ -262,7 +262,7 @@ test('session epoch guard preserves a rotated session when an old no-epoch unaut
   useAuthStore.setState({ sessionStatus: 'authenticated', sessionEpoch: 2, user: { plan: 'Platzi Pro' } });
   resolveFetch({
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({ isAuthenticated: false }),
   });
@@ -280,7 +280,7 @@ test('late response body cannot overwrite a timeout diagnostic when the mock ign
   let resolveBody;
   globalThis.fetch = async () => ({
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: () => new Promise(resolve => { resolveBody = resolve; }),
   });
@@ -313,7 +313,7 @@ test('RED proof 5: recheckSession skips duplicate synchronous invocation while i
     resolveFetch({
       ok: false,
       status: 404,
-      url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+      url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
       headers: new Map(),
       text: async () => '',
     });
@@ -337,7 +337,7 @@ test('RED proof 5: recheckSession skips duplicate synchronous invocation while i
 test('RED proof 6: formatDiagnosticReport produces sanitized exact whitelist text with no secrets', () => {
   const diag = {
     environment: 'extension',
-    endpointHint: 'header/v2/user/',
+    endpointHint: 'headerv2/user/',
     method: 'GET',
     httpStatus: 404,
     responseKind: 'empty',
@@ -349,9 +349,9 @@ test('RED proof 6: formatDiagnosticReport produces sanitized exact whitelist tex
   const formatted = formatDiagnosticReport(diag);
   const expected = [
     'Entorno: Chrome Extension',
-    'Versión código: 1.0.8',
+    'Versión código: 1.0.9',
     'Versión manifest: no disponible',
-    'Endpoint: header/v2/user/',
+    'Endpoint: headerv2/user/',
     'Método: GET',
     'HTTP: 404',
     'Respuesta: vacía',
@@ -373,14 +373,14 @@ test('RED proof 6: formatDiagnosticReport produces sanitized exact whitelist tex
     authStatus: 'authenticated',
     reason: 'HTTP_777',
   });
-  assert.match(hostile, /Endpoint: header\/v2\/user\//);
+  assert.match(hostile, /Endpoint: headerv2\/user\//);
   assert.match(hostile, /Método: GET/);
   assert.match(hostile, /HTTP: null/);
   assert.match(hostile, /Motivo: UNKNOWN/);
   assert.equal(hostile.includes('evil.invalid'), false);
 });
 
-test('RED proof 7: version synchronization matches 1.0.8 across package.json and manifest.json', async () => {
+test('RED proof 7: version synchronization matches 1.0.9 across package.json and manifest.json', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const manifest = JSON.parse(await readFile(new URL('../public/manifest.json', import.meta.url), 'utf8'));
 

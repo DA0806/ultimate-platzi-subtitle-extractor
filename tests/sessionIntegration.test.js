@@ -116,7 +116,7 @@ test('PlatziSessionAdapter: uses strict fetch options (credentials: include, red
     return {
       ok: true,
       status: 200,
-      url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+      url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
       headers: new Map([['content-type', 'application/json']]),
       text: async () => JSON.stringify({ isAuthenticated: true, userId: 101 }),
     };
@@ -130,6 +130,37 @@ test('PlatziSessionAdapter: uses strict fetch options (credentials: include, red
   assert.equal(capturedOptions.redirect, 'error');
   assert.equal(capturedOptions.cache, 'no-store');
   assert.equal(capturedOptions.headers['Accept'], 'application/json');
+});
+
+test('PlatziSessionAdapter: requests the official headerv2 endpoint and rejects the obsolete header/v2 response path', async () => {
+  enableExtensionMode();
+
+  const officialEndpoint = 'https://api.platzi.com/api/v1/components/headerv2/user/';
+  const obsoleteEndpoint = 'https://api.platzi.com/api/v1/components/header/v2/user/';
+  let responseUrl = officialEndpoint;
+  let requestedUrl;
+  globalThis.fetch = async url => {
+    requestedUrl = url;
+    return {
+      ok: true,
+      status: 200,
+      url: responseUrl,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify({ isAuthenticated: true, userId: 101 }),
+    };
+  };
+
+  const adapter = new PlatziSessionAdapter();
+  const verified = await adapter.checkSession();
+
+  assert.equal(requestedUrl, officialEndpoint);
+  assert.equal(verified.status, 'verified');
+  assert.equal(verified.authenticated, true);
+
+  responseUrl = obsoleteEndpoint;
+  const obsolete = await adapter.checkSession();
+  assert.equal(obsolete.status, 'unknown');
+  assert.equal(obsolete.reason, 'REDIRECT_INVALID');
 });
 
 test('PlatziSessionAdapter: HTTP 403 returns unknown without invalidating existing session', async () => {
@@ -205,7 +236,7 @@ test('PlatziSessionAdapter: redirected response to non-endpoint origin or with q
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/?redirect=1',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/?redirect=1',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({ isAuthenticated: false }),
   });
@@ -214,11 +245,11 @@ test('PlatziSessionAdapter: redirected response to non-endpoint origin or with q
   assert.equal(resQuery.status, 'unknown');
   assert.equal(resQuery.reason, 'REDIRECT_INVALID');
 
-  // Subpath under header/v2/user/
+  // Subpath under headerv2/user/
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/nested/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/nested/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({ isAuthenticated: false }),
   });
@@ -234,7 +265,7 @@ test('PlatziSessionAdapter: rejects nested schema (heuristics/guesses) and requi
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       data: {
@@ -267,7 +298,7 @@ test('PlatziSessionAdapter: invalid userId (string, 0, negative, NaN) returns un
     globalThis.fetch = async () => ({
       ok: true,
       status: 200,
-      url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+      url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
       headers: new Map([['content-type', 'application/json']]),
       text: async () => JSON.stringify(payload),
     });
@@ -289,7 +320,7 @@ test('PlatziSessionAdapter: isAuthenticated: false HTTP 200 confirms unauthentic
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       isAuthenticated: false,
@@ -318,7 +349,7 @@ test('PlatziSessionAdapter: valid verified session extracts strictly root fields
     return {
       ok: true,
       status: 200,
-      url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+      url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
       headers: new Map([['content-type', 'application/json']]),
       text: async () => JSON.stringify({
         isAuthenticated: true,
@@ -367,7 +398,7 @@ test('PlatziSessionAdapter: account switch (A -> B) invalidates previous authori
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       isAuthenticated: true,
@@ -387,7 +418,7 @@ test('PlatziSessionAdapter: account switch (A -> B) invalidates previous authori
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       isAuthenticated: true,
@@ -426,7 +457,7 @@ test('PlatziSessionAdapter: stale in-flight check cannot overwrite state after l
   resolveFetch({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       isAuthenticated: true,
@@ -475,7 +506,7 @@ test('PlatziSessionAdapter ordering: concurrent requests: older delayed request 
   resolveNewer({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       isAuthenticated: true,
@@ -495,7 +526,7 @@ test('PlatziSessionAdapter ordering: concurrent requests: older delayed request 
   resolveOlder({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       isAuthenticated: false,
@@ -535,7 +566,7 @@ test('recheckSession: skips a duplicate while the first verification is pending'
   resolveOlder({
     ok: true,
     status: 200,
-    url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+    url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       isAuthenticated: true,
@@ -882,11 +913,11 @@ test('defaultAuthorizationService uses real PlatziSessionAdapter and resolves id
   setupMockDOMParser();
 
   globalThis.fetch = async (url) => {
-    if (url.includes('/components/header/v2/user/')) {
+    if (url.includes('/components/headerv2/user/')) {
       return {
         ok: true,
         status: 200,
-        url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
+        url: 'https://api.platzi.com/api/v1/components/headerv2/user/',
         headers: new Map([['content-type', 'application/json']]),
         text: async () => JSON.stringify({
           isAuthenticated: true,

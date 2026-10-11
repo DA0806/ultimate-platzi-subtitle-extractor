@@ -47,7 +47,7 @@ test('class gateway denies unknown identity before the first protected HTTP requ
   globalThis.chrome = { runtime: { id: 'test-extension' } };
   let requests = 0;
   globalThis.fetch = async (url) => {
-    if (!url || !String(url).includes('/components/header/')) {
+    if (!url || !String(url).includes('/components/headerv2/user/')) {
       requests += 1;
     }
     return { ok: true, status: 200, statusText: 'OK', text: async () => '<html />' };
@@ -113,7 +113,7 @@ test('ordinary pages do not activate extension mode', () => {
 
 test('extension manifest does not request cookie access', async () => {
   const manifest = JSON.parse(await readFile(new URL('../public/manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.version, '1.0.8');
+  assert.equal(manifest.version, '1.0.9');
   assert.equal(manifest.permissions?.includes('cookies') ?? false, false);
 });
 
