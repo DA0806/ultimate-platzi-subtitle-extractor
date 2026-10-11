@@ -403,6 +403,7 @@ test('PlatziSessionAdapter: account switch (A -> B) invalidates previous authori
   assert.equal(resB.sessionEpoch, 2, 'Epoch must be incremented upon account rotation');
   assert.equal(useAuthStore.getState().sessionEpoch, 2);
   assert.equal(useAuthStore.getState().user?.plan, 'Platzi Empresarial');
+  assert.equal(useAuthStore.getState().lastDiagnostic?.reason, 'ACCOUNT_CHANGED');
 });
 
 test('PlatziSessionAdapter: stale in-flight check cannot overwrite state after logout or epoch rotation', async () => {
@@ -511,29 +512,27 @@ test('PlatziSessionAdapter ordering: concurrent requests: older delayed request 
   assert.equal(adapter.lastVerifiedAccountId, '8888');
 });
 
-test('recheckSession: delegates to adapter and preserves state when delayed older check completes', async () => {
+test('recheckSession: skips a duplicate while the first verification is pending', async () => {
   enableExtensionMode();
   useAuthStore.setState({ sessionStatus: 'unknown', sessionEpoch: 0 });
 
   let resolveOlder;
-  let resolveNewer;
   const olderPromise = new Promise(resolve => { resolveOlder = resolve; });
-  const newerPromise = new Promise(resolve => { resolveNewer = resolve; });
 
   let callCount = 0;
   globalThis.fetch = async () => {
     callCount += 1;
-    if (callCount === 1) return olderPromise;
-    return newerPromise;
+    return olderPromise;
   };
 
   // Call 1 begins
   const check1 = recheckSession();
-  // Call 2 begins
+  // Call 2 is rejected synchronously while call 1 is still verifying.
   const check2 = recheckSession();
+  assert.equal(check2, null);
+  assert.equal(callCount, 1);
 
-  // Call 2 completes verified
-  resolveNewer({
+  resolveOlder({
     ok: true,
     status: 200,
     url: 'https://api.platzi.com/api/v1/components/header/v2/user/',
@@ -545,16 +544,7 @@ test('recheckSession: delegates to adapter and preserves state when delayed olde
     }),
   });
 
-  await check2;
-  assert.equal(useAuthStore.getState().sessionStatus, 'authenticated');
-  assert.equal(useAuthStore.getState().user?.plan, 'Platzi Expert');
-
-  // Call 1 completes with network failure
-  resolveOlder(Promise.reject(new Error('Network disconnected')));
-
   await check1;
-
-  // Stale check1 must NOT overwrite sessionStatus to unknown!
   assert.equal(useAuthStore.getState().sessionStatus, 'authenticated');
   assert.equal(useAuthStore.getState().user?.plan, 'Platzi Expert');
 });

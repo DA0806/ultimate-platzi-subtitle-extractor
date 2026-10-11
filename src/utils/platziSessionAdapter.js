@@ -1,68 +1,167 @@
 import { isExtension } from './platziClient.js';
 import { useAuthStore } from '../store/authStore.js';
-import { getSessionValidityDeadline } from './authorizationService.js';
+import { getSessionValidityDeadline } from './sessionDeadline.js';
+import { getVersionInfo } from './version.js';
 
 export const SESSION_USER_ENDPOINT = 'https://api.platzi.com/api/v1/components/header/v2/user/';
 export const OBSERVATION_TTL_MS = 30_000;
+
+export const buildSanitizedDiagnostic = ({
+  environment = isExtension() ? 'extension' : 'web_other',
+  httpStatus = null,
+  responseKind = 'not_received',
+  authStatus = 'auth_unknown',
+  reason = 'UNKNOWN',
+  urlExactMatch = false,
+} = {}) => {
+  const validHttpStatus = Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 ? httpStatus : null;
+  const validResponseKind = ['empty', 'json', 'html', 'other', 'unread', 'not_received'].includes(responseKind)
+    ? responseKind
+    : 'other';
+  const validAuthStatus = ['auth_unknown', 'authenticated', 'unauthenticated'].includes(authStatus)
+    ? authStatus
+    : 'auth_unknown';
+  const allowedReasons = [
+    'HTTP_404', 'HTTP_403', 'HTTP_401', 'HTTP_429', 'TIMEOUT', 'ABORTED',
+    'NETWORK_ERROR', 'NON_JSON_CONTENT_TYPE', 'READ_BODY_FAILED',
+    'INVALID_JSON', 'INVALID_ROOT_SCHEMA', 'INVALID_USER_ID',
+    'REDIRECT_INVALID', 'SESSION_EPOCH_MISMATCH', 'STALE_REQUEST',
+    'EXTENSION_ONLY_AUTH', 'ACCOUNT_CHANGED', 'HTTP_OTHER', 'OK',
+  ];
+  const sanitizedReason = allowedReasons.includes(reason)
+    ? reason
+    : 'UNKNOWN';
+  const versionInfo = getVersionInfo();
+
+  return Object.freeze({
+    environment: environment === 'extension' ? 'extension' : 'web_other',
+    codeVersion: versionInfo.codeVersion,
+    manifestVersion: versionInfo.manifestVersion,
+    endpointHint: 'header/v2/user/',
+    method: 'GET',
+    httpStatus: validHttpStatus,
+    responseKind: validResponseKind,
+    authStatus: validAuthStatus,
+    reason: sanitizedReason,
+    urlExactMatch: Boolean(urlExactMatch),
+  });
+};
+
+export const formatDiagnosticReport = (diag) => {
+  if (!diag) return '';
+  const safe = buildSanitizedDiagnostic(diag);
+  const env = safe.environment === 'extension' ? 'Chrome Extension' : 'Web / Other';
+  const http = safe.httpStatus !== null ? String(safe.httpStatus) : 'null';
+
+  let resp = 'desconocida';
+  if (safe.responseKind === 'empty') resp = 'vacía';
+  else if (safe.responseKind === 'json') resp = 'json';
+  else if (safe.responseKind === 'html') resp = 'html';
+  else if (safe.responseKind === 'other') resp = 'otra';
+  else if (safe.responseKind === 'unread') resp = 'no leída';
+  else if (safe.responseKind === 'not_received') resp = 'no recibida';
+
+  let auth = 'desconocida';
+  if (safe.authStatus === 'authenticated') auth = 'autenticada';
+  else if (safe.authStatus === 'unauthenticated') auth = 'sin sesión';
+
+  return [
+    `Entorno: ${env}`,
+    `Versión código: ${safe.codeVersion}`,
+    `Versión manifest: ${safe.manifestVersion || 'no disponible'}`,
+    `Endpoint: ${safe.endpointHint}`,
+    `Método: ${safe.method}`,
+    `HTTP: ${http}`,
+    `Respuesta: ${resp}`,
+    `Autenticación: ${auth}`,
+    `Motivo: ${safe.reason}`,
+  ].join('\n');
+};
 
 export class PlatziSessionAdapter {
   constructor(options = {}) {
     this.now = options.now || (() => Date.now());
     this.getSessionEpoch = options.getSessionEpoch || (() => useAuthStore.getState().sessionEpoch || 0);
+    this.timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 10_000;
     this.lastVerifiedAccountId = null;
     this.requestIdCounter = 0;
+    this.latestStartedRequestId = 0;
     this.latestCompletedRequestId = 0;
   }
 
-  _applyOutcome(requestId, operationEpoch, outcome) {
+  _isStale(requestId, operationEpoch) {
     if (this.getSessionEpoch() !== operationEpoch) {
-      return {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'SESSION_EPOCH_MISMATCH',
-        sessionEpoch: this.getSessionEpoch(),
-      };
+      return { isStale: true, reason: 'SESSION_EPOCH_MISMATCH' };
+    }
+    if (requestId < this.latestStartedRequestId) {
+      return { isStale: true, reason: 'STALE_REQUEST' };
     }
     if (requestId < this.latestCompletedRequestId) {
+      return { isStale: true, reason: 'STALE_REQUEST' };
+    }
+    return { isStale: false };
+  }
+
+  _applyOutcome(requestId, operationEpoch, outcome, diagnosticProps = {}) {
+    const staleCheck = this._isStale(requestId, operationEpoch);
+    if (staleCheck.isStale) {
       return {
         status: 'unknown',
         authenticated: false,
-        reason: 'STALE_REQUEST',
+        reason: staleCheck.reason,
         sessionEpoch: operationEpoch,
       };
     }
     this.latestCompletedRequestId = requestId;
+
+    useAuthStore.getState().setUser(null);
     useAuthStore.getState().setSessionStatus('unknown');
+
+    const sanitizedDiag = buildSanitizedDiagnostic({
+      ...diagnosticProps,
+      authStatus: 'auth_unknown',
+      reason: outcome.reason,
+    });
+    useAuthStore.getState().setVerificationResult({
+      isVerifying: false,
+      lastDiagnostic: sanitizedDiag,
+    });
+
     return {
       ...outcome,
       sessionEpoch: operationEpoch,
     };
   }
 
-  _applyUnauthenticated(requestId, operationEpoch, observedAt, validUntil) {
-    if (this.getSessionEpoch() !== operationEpoch) {
+  _applyUnauthenticated(requestId, operationEpoch, observedAt, validUntil, diagnosticProps = {}) {
+    const staleCheck = this._isStale(requestId, operationEpoch);
+    if (staleCheck.isStale) {
       return {
         status: 'unknown',
         authenticated: false,
-        reason: 'SESSION_EPOCH_MISMATCH',
-        sessionEpoch: this.getSessionEpoch(),
-      };
-    }
-    if (requestId < this.latestCompletedRequestId) {
-      return {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'STALE_REQUEST',
+        reason: staleCheck.reason,
         sessionEpoch: operationEpoch,
       };
     }
     this.latestCompletedRequestId = requestId;
+
     if (this.lastVerifiedAccountId !== null) {
       this.lastVerifiedAccountId = null;
       useAuthStore.getState().invalidateSession();
     }
     useAuthStore.getState().setSessionStatus('unauthenticated');
     useAuthStore.getState().setUser(null);
+
+    const sanitizedDiag = buildSanitizedDiagnostic({
+      ...diagnosticProps,
+      authStatus: 'unauthenticated',
+      reason: 'OK',
+    });
+    useAuthStore.getState().setVerificationResult({
+      isVerifying: false,
+      lastDiagnostic: sanitizedDiag,
+    });
+
     return {
       status: 'unauthenticated',
       authenticated: false,
@@ -73,20 +172,13 @@ export class PlatziSessionAdapter {
     };
   }
 
-  _applyVerified(requestId, operationEpoch, data, observedAt, validUntil) {
-    if (this.getSessionEpoch() !== operationEpoch) {
+  _applyVerified(requestId, operationEpoch, data, observedAt, validUntil, diagnosticProps = {}) {
+    const staleCheck = this._isStale(requestId, operationEpoch);
+    if (staleCheck.isStale) {
       return {
         status: 'unknown',
         authenticated: false,
-        reason: 'SESSION_EPOCH_MISMATCH',
-        sessionEpoch: this.getSessionEpoch(),
-      };
-    }
-    if (requestId < this.latestCompletedRequestId) {
-      return {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'STALE_REQUEST',
+        reason: staleCheck.reason,
         sessionEpoch: operationEpoch,
       };
     }
@@ -94,7 +186,8 @@ export class PlatziSessionAdapter {
 
     const accountId = String(data.userId);
     let currentEpoch = operationEpoch;
-    if (this.lastVerifiedAccountId !== null && this.lastVerifiedAccountId !== accountId) {
+    const accountChanged = this.lastVerifiedAccountId !== null && this.lastVerifiedAccountId !== accountId;
+    if (accountChanged) {
       useAuthStore.getState().invalidateSession();
       currentEpoch = this.getSessionEpoch();
     }
@@ -113,6 +206,16 @@ export class PlatziSessionAdapter {
       isB2B,
     });
 
+    const sanitizedDiag = buildSanitizedDiagnostic({
+      ...diagnosticProps,
+      authStatus: 'authenticated',
+      reason: accountChanged ? 'ACCOUNT_CHANGED' : 'OK',
+    });
+    useAuthStore.getState().setVerificationResult({
+      isVerifying: false,
+      lastDiagnostic: sanitizedDiag,
+    });
+
     return {
       status: 'verified',
       authenticated: true,
@@ -129,16 +232,34 @@ export class PlatziSessionAdapter {
 
   async checkSession() {
     const requestId = ++this.requestIdCounter;
+    this.latestStartedRequestId = requestId;
     const operationEpoch = this.getSessionEpoch();
 
+    useAuthStore.getState().setVerifying(true, requestId);
+
     if (!isExtension()) {
-      return {
+      return this._applyOutcome(requestId, operationEpoch, {
         status: 'unknown',
         authenticated: false,
         reason: 'EXTENSION_ONLY_AUTH',
-        sessionEpoch: operationEpoch,
-      };
+      }, {
+        environment: 'web_other',
+        httpStatus: null,
+        responseKind: 'not_received',
+        reason: 'EXTENSION_ONLY_AUTH',
+      });
     }
+
+    const controller = new AbortController();
+    let timeoutFired = false;
+    const timeoutId = setTimeout(() => {
+      timeoutFired = true;
+      try {
+        controller.abort('timeout');
+      } catch {
+        // Safe abort
+      }
+    }, this.timeoutMs);
 
     let response;
     try {
@@ -147,121 +268,176 @@ export class PlatziSessionAdapter {
         credentials: 'include',
         redirect: 'error',
         cache: 'no-store',
+        signal: controller.signal,
         headers: {
           'Accept': 'application/json',
         },
       });
-    } catch {
-      return this._applyOutcome(requestId, operationEpoch, {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'NETWORK_ERROR',
-      });
-    }
-
-    if (this.getSessionEpoch() !== operationEpoch) {
-      return {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'SESSION_EPOCH_MISMATCH',
-        sessionEpoch: this.getSessionEpoch(),
-      };
-    }
-    if (requestId < this.latestCompletedRequestId) {
-      return {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'STALE_REQUEST',
-        sessionEpoch: operationEpoch,
-      };
-    }
-
-    if (response.url) {
-      try {
-        const respUrl = new URL(response.url);
-        if (
-          respUrl.origin !== 'https://api.platzi.com'
-          || respUrl.pathname !== '/api/v1/components/header/v2/user/'
-          || respUrl.search !== ''
-          || respUrl.hash !== ''
-        ) {
-          return this._applyOutcome(requestId, operationEpoch, {
-            status: 'unknown',
-            authenticated: false,
-            reason: 'REDIRECT_INVALID',
-          });
-        }
-      } catch {
+      const postFetchStale = this._isStale(requestId, operationEpoch);
+      if (postFetchStale.isStale) {
+        clearTimeout(timeoutId);
         return this._applyOutcome(requestId, operationEpoch, {
           status: 'unknown',
           authenticated: false,
-          reason: 'REDIRECT_INVALID',
+          reason: postFetchStale.reason,
         });
+      }
+    } catch (fetchErr) {
+      clearTimeout(timeoutId);
+      const isTimeout = timeoutFired || fetchErr?.name === 'TimeoutError' || (fetchErr?.name === 'AbortError' && timeoutFired);
+      const isAborted = !isTimeout && fetchErr?.name === 'AbortError';
+      const reason = isTimeout ? 'TIMEOUT' : (isAborted ? 'ABORTED' : 'NETWORK_ERROR');
+      return this._applyOutcome(requestId, operationEpoch, {
+        status: 'unknown',
+        authenticated: false,
+        reason,
+      }, {
+        environment: 'extension',
+        httpStatus: null,
+        responseKind: 'not_received',
+        reason,
+      });
+    }
+
+    let urlExactMatch = !response.url;
+    if (response.url) {
+      try {
+        const respUrl = new URL(response.url);
+        urlExactMatch = (
+          respUrl.origin === 'https://api.platzi.com'
+          && respUrl.pathname === '/api/v1/components/header/v2/user/'
+          && respUrl.search === ''
+          && respUrl.hash === ''
+        );
+      } catch {
+        urlExactMatch = false;
       }
     }
 
-    if (response.status === 403) {
+    if (!urlExactMatch) {
+      clearTimeout(timeoutId);
       return this._applyOutcome(requestId, operationEpoch, {
         status: 'unknown',
         authenticated: false,
-        reason: 'HTTP_403',
+        reason: 'REDIRECT_INVALID',
+      }, {
+        environment: 'extension',
+        httpStatus: response.status,
+        responseKind: 'other',
+        urlExactMatch: false,
+        reason: 'REDIRECT_INVALID',
       });
     }
 
-    if (response.status === 401) {
-      return this._applyOutcome(requestId, operationEpoch, {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'HTTP_401',
-      });
+    let bodyText = '';
+    let readBodyFailed = false;
+    try {
+      bodyText = await response.text();
+      const postBodyStale = this._isStale(requestId, operationEpoch);
+      if (postBodyStale.isStale) {
+        clearTimeout(timeoutId);
+        return this._applyOutcome(requestId, operationEpoch, {
+          status: 'unknown',
+          authenticated: false,
+          reason: postBodyStale.reason,
+        });
+      }
+    } catch (readErr) {
+      readBodyFailed = true;
+      if (timeoutFired || readErr?.name === 'TimeoutError' || (readErr?.name === 'AbortError' && timeoutFired)) {
+        clearTimeout(timeoutId);
+        return this._applyOutcome(requestId, operationEpoch, {
+          status: 'unknown',
+          authenticated: false,
+          reason: 'TIMEOUT',
+        }, {
+          environment: 'extension',
+          httpStatus: response.status,
+          responseKind: 'unread',
+          urlExactMatch: true,
+          reason: 'TIMEOUT',
+        });
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
 
-    if (response.status !== 200) {
+    if (timeoutFired) {
       return this._applyOutcome(requestId, operationEpoch, {
         status: 'unknown',
         authenticated: false,
-        reason: `HTTP_${response.status}`,
+        reason: 'TIMEOUT',
+      }, {
+        environment: 'extension',
+        httpStatus: response.status,
+        responseKind: 'unread',
+        urlExactMatch: true,
+        reason: 'TIMEOUT',
       });
     }
 
     const contentType = response.headers?.get ? response.headers.get('content-type') : null;
-    if (!contentType || !contentType.toLowerCase().includes('application/json')) {
-      return this._applyOutcome(requestId, operationEpoch, {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'NON_JSON_CONTENT_TYPE',
-      });
-    }
-
-    let bodyText;
-    try {
-      bodyText = await response.text();
-    } catch {
-      return this._applyOutcome(requestId, operationEpoch, {
-        status: 'unknown',
-        authenticated: false,
-        reason: 'READ_BODY_FAILED',
-      });
+    let responseKind = 'other';
+    if (readBodyFailed) {
+      responseKind = 'unread';
+    } else if (!bodyText || bodyText.trim().length === 0) {
+      responseKind = 'empty';
+    } else if (contentType && contentType.toLowerCase().includes('application/json')) {
+      responseKind = 'json';
+    } else if (contentType && contentType.toLowerCase().includes('text/html')) {
+      responseKind = 'html';
     }
 
     const observedAt = this.now();
     const validUntil = observedAt + OBSERVATION_TTL_MS;
 
-    if (this.getSessionEpoch() !== operationEpoch) {
-      return {
+    if (response.status !== 200) {
+      const statusReasons = {
+        401: 'HTTP_401',
+        403: 'HTTP_403',
+        404: 'HTTP_404',
+        429: 'HTTP_429',
+      };
+      const reason = statusReasons[response.status] || 'HTTP_OTHER';
+      return this._applyOutcome(requestId, operationEpoch, {
         status: 'unknown',
         authenticated: false,
-        reason: 'SESSION_EPOCH_MISMATCH',
-        sessionEpoch: this.getSessionEpoch(),
-      };
+        reason,
+      }, {
+        environment: 'extension',
+        httpStatus: response.status,
+        responseKind,
+        urlExactMatch: true,
+        reason,
+      });
     }
-    if (requestId < this.latestCompletedRequestId) {
-      return {
+
+    if (!contentType || !contentType.toLowerCase().includes('application/json')) {
+      return this._applyOutcome(requestId, operationEpoch, {
         status: 'unknown',
         authenticated: false,
-        reason: 'STALE_REQUEST',
-        sessionEpoch: operationEpoch,
-      };
+        reason: 'NON_JSON_CONTENT_TYPE',
+      }, {
+        environment: 'extension',
+        httpStatus: 200,
+        responseKind,
+        urlExactMatch: true,
+        reason: 'NON_JSON_CONTENT_TYPE',
+      });
+    }
+
+    if (readBodyFailed) {
+      return this._applyOutcome(requestId, operationEpoch, {
+        status: 'unknown',
+        authenticated: false,
+        reason: 'READ_BODY_FAILED',
+      }, {
+        environment: 'extension',
+        httpStatus: 200,
+        responseKind: 'unread',
+        urlExactMatch: true,
+        reason: 'READ_BODY_FAILED',
+      });
     }
 
     let data;
@@ -272,6 +448,12 @@ export class PlatziSessionAdapter {
         status: 'unknown',
         authenticated: false,
         reason: 'INVALID_JSON',
+      }, {
+        environment: 'extension',
+        httpStatus: 200,
+        responseKind,
+        urlExactMatch: true,
+        reason: 'INVALID_JSON',
       });
     }
 
@@ -279,6 +461,12 @@ export class PlatziSessionAdapter {
       return this._applyOutcome(requestId, operationEpoch, {
         status: 'unknown',
         authenticated: false,
+        reason: 'INVALID_ROOT_SCHEMA',
+      }, {
+        environment: 'extension',
+        httpStatus: 200,
+        responseKind: 'json',
+        urlExactMatch: true,
         reason: 'INVALID_ROOT_SCHEMA',
       });
     }
@@ -288,11 +476,22 @@ export class PlatziSessionAdapter {
         status: 'unknown',
         authenticated: false,
         reason: 'INVALID_ROOT_SCHEMA',
+      }, {
+        environment: 'extension',
+        httpStatus: 200,
+        responseKind: 'json',
+        urlExactMatch: true,
+        reason: 'INVALID_ROOT_SCHEMA',
       });
     }
 
     if (data.isAuthenticated === false) {
-      return this._applyUnauthenticated(requestId, operationEpoch, observedAt, validUntil);
+      return this._applyUnauthenticated(requestId, operationEpoch, observedAt, validUntil, {
+        environment: 'extension',
+        httpStatus: 200,
+        responseKind: 'json',
+        urlExactMatch: true,
+      });
     }
 
     if (!Number.isSafeInteger(data.userId) || data.userId <= 0) {
@@ -300,10 +499,21 @@ export class PlatziSessionAdapter {
         status: 'unknown',
         authenticated: false,
         reason: 'INVALID_USER_ID',
+      }, {
+        environment: 'extension',
+        httpStatus: 200,
+        responseKind: 'json',
+        urlExactMatch: true,
+        reason: 'INVALID_USER_ID',
       });
     }
 
-    return this._applyVerified(requestId, operationEpoch, data, observedAt, validUntil);
+    return this._applyVerified(requestId, operationEpoch, data, observedAt, validUntil, {
+      environment: 'extension',
+      httpStatus: 200,
+      responseKind: 'json',
+      urlExactMatch: true,
+    });
   }
 }
 

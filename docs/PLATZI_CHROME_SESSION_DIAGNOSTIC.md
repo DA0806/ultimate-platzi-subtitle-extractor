@@ -25,11 +25,43 @@ Conforme a la instrucción autorizada:
    - Se sanitizaron los registros de depuración en consola en `useSubtitleExtractor.js` (emitiendo únicamente `{ code, status, classSlug }`, sin URLs firmadas completas ni cuerpos de error).
    - Se implementó la acotación de expiración por mínimo (`getSessionValidityDeadline`) garantizando que el TTL de observación local no extienda expiraciones de servidor reales.
    - Se implementó un control estricto de concurrencia y ordenamiento monótono de peticiones en el adaptador de sesión, evitando que peticiones demoradas sobrescriban estados más recientes o logouts.
-   - La suite cuenta con **98 pruebas unitarias y de integración pasando al 100% de forma determinista** (`node --test tests/*.test.js`).
+   - La suite cuenta con **111 pruebas automatizadas pasando al 100%** (`node --test tests/*.test.js`). La validación de Chrome, portapapeles y cuenta real sigue pendiente de ejecución manual.
 
 2. **Estado de Adaptadores: Sesión Nativa Implementada vs. Acceso/Exportación Fail-Closed:**
-   - **Adaptador de Sesión de Cabecera (`PlatziSessionAdapter`):** Implementado en `src/utils/platziSessionAdapter.js` y conectado a `defaultAuthorizationService.adapter.checkSession()`. Emplea el endpoint empírico confirmado por el usuario en Chrome DevTools (`GET https://api.platzi.com/api/v1/components/header/v2/user/`) con validación de esquema raíz estricto (`isAuthenticated`, `userId`), in-memory account binding, frescura local de 30s, y opciones de red estrictas (`redirect: 'error'`, `cache: 'no-store'`). Su capacidad para adjuntar cookies de sesión en el entorno real de Chrome está pendiente de la prueba manual de extensión (`liveextensionpending`).
+   - **Adaptador de Sesión de Cabecera (`PlatziSessionAdapter`):** Implementado en `src/utils/platziSessionAdapter.js` y conectado a `defaultAuthorizationService.adapter.checkSession()`. Emplea el endpoint observado por el usuario en Chrome DevTools (`GET https://api.platzi.com/api/v1/components/header/v2/user/`) con validación de esquema raíz estricto (`isAuthenticated`, `userId`), in-memory account binding, frescura local de 30s, y opciones de red estrictas (`redirect: 'error'`, `cache: 'no-store'`). Su comportamiento dentro de la extensión con una sesión real sigue pendiente de la prueba manual (`liveextensionpending`).
    - **Adaptadores de Acceso a Clase y Exportación (`checkClassAccess`, `checkExportPermission`):** Permanecen estrictamente en **`UNKNOWN` (Fail-Closed, default denial)**. No se identificó ni verificó un contrato de servidor aplicable que otorgue autoridad sobre reproducción de video o exportación de subtítulos protegidos. El adaptador definitivo de clase completa continúa pendiente.
+
+### 1.3. Evidencia nueva de sesión (tres contextos)
+
+El usuario observó el mismo endpoint de sesión en tres contextos, sin compartir cuerpos completos, cabeceras ni identificadores:
+
+| Contexto | Resultado sanitizado | Qué permite concluir |
+| :--- | :--- | :--- |
+| Frontend oficial de Platzi, con sesión | `200`, JSON raíz con `isAuthenticated` y campos de estado | El frontend oficial recibió una respuesta de sesión válida en ese contexto. |
+| Consola de la página oficial, `fetch` GET simple | `404`, cuerpo no confirmado | El endpoint no es reproducible con esa solicitud simple; no demuestra por sí solo la causa del rechazo. |
+| UPSE en la página de extensión, `fetch` GET simple | `404`, cuerpo vacío | La extensión no obtuvo una respuesta de sesión válida en esa prueba. Cookie presence no equivale a autenticación suficiente. |
+
+La evidencia no demuestra que la ausencia de una cabecera concreta sea la única causa, ni que el comportamiento sea exclusivo de la extensión. No se ha elegido un adaptador definitivo de acceso premium; el procedimiento manual debe comparar las respuestas autoritativas de la clase antes de ampliar permisos o exportación.
+
+### 1.4. Comparación sanitizada de señales observadas
+
+| Contexto | `Cookie` | `Origin` | `api-authorization` | Resultado |
+| :--- | :--- | :--- | :--- | :--- |
+| Frontend oficial de Platzi | No visible en el reporte | Visible | Visible | `200` con raíz JSON de sesión |
+| Fetch simple de UPSE/extensión | Visible | No visible | No visible | `404`, cuerpo vacío |
+
+“No visible” significa que el usuario no reportó esa cabecera en la observación; no significa que se haya demostrado su ausencia en la red. Cookie presence tampoco demuestra que la solicitud sea autenticada o que otorgue acceso a una clase.
+
+### 1.5. Hipótesis H1–H6 y verificación segura
+
+| Hipótesis | Evidencia actual | Faltante | Verificación segura | Estado |
+| :--- | :--- | :--- | :--- | :--- |
+| H1. La API exige credenciales de aplicación adicionales a las cookies | Frontend oficial reportó `Origin` y `api-authorization`; UPSE reportó una cookie visible sin esas cabeceras | Si esas señales son requisito, cuál y para qué operación | Comparar solicitudes normales en Network sin copiar valores ni fabricar cabeceras | No demostrado |
+| H2. El `404` proviene de un gateway deliberado por faltar autenticación o contexto | Fetch simple oficial emitió `404`; cuerpo no confirmado; UPSE emitió `404` con cuerpo vacío | Evidencia del gateway y del contexto que produce el estado | Comparar respuesta y redirección de los flujos oficiales, sin replay ni manipulación | No demostrado |
+| H3. El endpoint no admite solicitudes desde extensiones de terceros | UPSE emitió `404`, pero el fetch simple oficial también emitió `404` | Diferencia causal entre origen de extensión y origen web | Recheck desde pestaña nueva de extensión y comparación equivalente en web | No demostrado; el 404 web debilita atribución exclusiva |
+| H4. Las cookies son distintas o insuficientes para la operación | Cookie visible en UPSE; no se observaron valores ni reglas de envío | Atributos y políticas efectivas del perfil, sin extraer secretos | Inspección agregada de estado y respuesta, nunca valores de cookies | No demostrado |
+| H5. El navegador diferencia las cabeceras de la solicitud | `Origin`/`api-authorization` fueron reportadas solo en el frontend oficial | Si la diferencia es requerida por el backend o incidental | Comparar presencia agregada de cabeceras en solicitudes normales | No demostrado |
+| H6. La extensión usa la API correcta, pero el backend impide la integración | Endpoint y opciones GET nativas coinciden; respuesta UPSE sigue en `404` | Respuesta autoritativa que confirme o descarte este flujo | Build reciente, pestaña nueva, recheck y reporte whitelistado | No demostrado; el 404 web también debilita exclusividad |
 
 ---
 
@@ -256,18 +288,21 @@ Entonces el estado se clasifica formalmente como **`UNKNOWN`** y UPSE mantendrá
    ```
    *(NO seleccione la carpeta `public` ni la raíz del repositorio, ya que carecen de los módulos empaquetados de Vite).*
 4. Si la extensión ya estaba cargada: localice la tarjeta de UPSE que apunta a dicha carpeta `dist` y pulse el botón de recarga (ícono circular con flecha).
+5. Cierre cualquier pestaña o popup antiguo de UPSE y abra una pestaña nueva de la extensión para evitar código previamente cargado.
+6. Antes de recheck, compruebe en la línea de versión que **código** y **manifest** reporten `1.0.8`. Una discrepancia identifica una pestaña o build desactualizado; no se debe inferir que `getManifest()` por sí solo recargó el código.
 
 ### 8.2. Verificación mediante la Interfaz Normal de UPSE
 1. Inicie sesión en Platzi en una pestaña normal de Chrome utilizando su cuenta (Free o Suscriptor).
 2. Abra la extensión UPSE (haciendo clic en su ícono de acción o abriendo su pestaña dedicada).
 3. Abra el panel de ajustes de sesión y haga clic en **«Volver a verificar»** (`Recheck`).
-4. Compruebe la etiqueta de estado de sesión:
-   - **Sesión activa detectada (Platzi Empresarial)** o **(Platzi Free)**: Confirma que Chrome adjuntó cookies nativas y el servidor respondió HTTP 200 con esquema válido en la raíz.
+4. Compruebe la etiqueta de estado de sesión y el diagnóstico visible:
+   - **Sesión activa detectada (Platzi Empresarial)** o **(Platzi Free)**: Indica que ese contexto recibió HTTP 200 con esquema válido en la raíz; la etiqueta no otorga permisos de clase o exportación.
    - **Sin sesión en Platzi**: Confirma que el servidor respondió HTTP 200 con `{ isAuthenticated: false }`.
-   - **Sesión: Estado desconocido**: Si el servidor respondió 403 (origen no confirmado), error de red o desafío perimetral (el estado permanece seguro en *fail-closed* sin destruir credenciales).
+   - **Sesión: Estado desconocido**: Si el servidor respondió 403, hubo un error de red o apareció un desafío perimetral, el estado permanece seguro en *fail-closed* sin destruir credenciales. `NETWORK_ERROR` no permite atribuir la causa a CORS, permisos del navegador, cookies o al origen: solo indica que no hubo una respuesta observable.
 5. Verifique transiciones:
    - Cambie de cuenta (ej. de cuenta A a cuenta B) o cierre sesión en la web de Platzi, y presione nuevamente **«Volver a verificar»**.
    - Confirme que el estado refleje la transición de forma sanitizada sin requerir reinicio del navegador.
+6. Use **Copiar diagnóstico** únicamente para compartir el reporte whitelistado; no copie Network, cookies, cabeceras, cuerpos ni URLs completas.
 
 ### 8.3. Reporte Sanitizado Mínimo Requerido
 Reporte únicamente los siguientes datos agregados (sin identificadores personales ni secretos):
@@ -275,7 +310,7 @@ Reporte únicamente los siguientes datos agregados (sin identificadores personal
 - **Presencia y tipo de `isAuthenticated`:** [boolean: true / false]
 - **Presencia y validez de `userId`:** [safe positive integer: sí / no]
 - **Tipo de respuesta clasificado:** [json / otro]
-- **Motivo sanitizado:** [OK / HTTP_403 / EXTENSION_ONLY_AUTH / ninguno]
+- **Motivo sanitizado:** [OK / HTTP_404 / HTTP_403 / HTTP_401 / HTTP_429 / TIMEOUT / NETWORK_ERROR / EXTENSION_ONLY_AUTH / ninguno]. `NETWORK_ERROR` no distingue por sí solo red, CORS, permisos del navegador, cookies ni contexto de extensión.
 - **PROHIBIDO REPORTAR:** `userId` numérico real, `accountId`, nombre, email, plan comercial exacto si es personal, cookies ni cabeceras secretas.
 
 ### 8.4. Sonda Segura Opcional desde la Consola de la Extensión
@@ -306,7 +341,7 @@ Si prefiere verificar manualmente desde las DevTools de la extensión (`Inspect 
       console.log({
         status: r.status,
         responseType: responseClassification,
-        reason: !isExactUrl ? 'REDIRECT_INVALID' : (!isJson ? 'NON_JSON_CONTENT_TYPE' : (r.status === 403 ? 'HTTP_403' : (r.status === 401 ? 'HTTP_401' : `HTTP_${r.status}`))),
+        reason: !isExactUrl ? 'REDIRECT_INVALID' : (!isJson ? 'NON_JSON_CONTENT_TYPE' : (r.status === 403 ? 'HTTP_403' : (r.status === 401 ? 'HTTP_401' : (r.status === 404 ? 'HTTP_404' : (r.status === 429 ? 'HTTP_429' : 'HTTP_OTHER'))))),
         authValue: null,
         hasValidUserId: false,
       });

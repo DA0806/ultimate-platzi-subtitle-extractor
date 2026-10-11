@@ -6,6 +6,12 @@ const root = process.cwd();
 const dist = path.join(root, 'dist');
 const output = path.join(dist, 'upse-extension.zip');
 
+const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
+const manifest = JSON.parse(await fs.readFile(path.join(dist, 'manifest.json'), 'utf8'));
+if (pkg.version !== manifest.version) {
+  throw new Error(`Version mismatch: package.json (${pkg.version}) !== manifest.json (${manifest.version})`);
+}
+
 const collectFiles = async (directory) => {
   const entries = await fs.readdir(directory, { withFileTypes: true });
   const files = [];

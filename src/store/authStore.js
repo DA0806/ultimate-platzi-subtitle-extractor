@@ -20,6 +20,9 @@ try {
 export const useAuthStore = create((set) => ({
   sessionEpoch: 0,
   sessionStatus: 'unknown',
+  isVerifying: false,
+  lastDiagnostic: null,
+  currentRequestId: 0,
   token: null,
   cookie: null,
   user: null,
@@ -30,11 +33,24 @@ export const useAuthStore = create((set) => ({
       sessionStatus: 'session_invalid',
       token: null,
       cookie: null,
+      isVerifying: false,
+      lastDiagnostic: null,
+      currentRequestId: 0,
     }));
     useSubtitleStore.getState().purgeExtractedContent();
   },
 
   setSessionStatus: (sessionStatus) => set({ sessionStatus }),
+
+  setVerifying: (isVerifying, requestId = 0) => set({
+    isVerifying,
+    ...(isVerifying ? { currentRequestId: requestId } : {}),
+  }),
+
+  setVerificationResult: ({ isVerifying = false, lastDiagnostic = null }) => set({
+    isVerifying,
+    lastDiagnostic,
+  }),
 
   // Kept as a display compatibility action; its arguments never grant authority.
   login: (_token, _cookie, user) => set({
@@ -51,6 +67,9 @@ export const useAuthStore = create((set) => ({
       user: null,
       sessionStatus: 'unauthenticated',
       sessionEpoch: (state.sessionEpoch || 0) + 1,
+      isVerifying: false,
+      lastDiagnostic: null,
+      currentRequestId: 0,
     }));
     useSubtitleStore.getState().purgeExtractedContent();
   },

@@ -4,7 +4,7 @@
 - **Ubicación en repositorio:** `worktrees/browser-extension/docs/PLATZI_SESSION_INTEGRATION_RESEARCH.md`
 - **Fecha de actualización:** 10 de octubre de 2026 (Fase de validación previa al commit)
 - **Rama de trabajo:** `feat/browser-extension` (`worktrees/browser-extension`)
-- **Carácter:** Documentación de Estado Actual e Histórico de Integración; el adaptador de cabecera de sesión nativo (`PlatziSessionAdapter`) está implementado en la rama y cubierto por 98 pruebas deterministas, con validación en vivo en Chrome pendiente de ejecución por el usuario (`liveextensionpending`).
+- **Carácter:** Documentación de Estado Actual e Histórico de Integración; el adaptador de cabecera de sesión nativo (`PlatziSessionAdapter`) está implementado en la rama y cubierto por la suite determinista de esta revisión, con validación en vivo en Chrome pendiente de ejecución por el usuario (`liveextensionpending`).
 
 ---
 
@@ -12,7 +12,7 @@
 
 ### 1.1. Inspección del Entorno y Suite de Pruebas
 - **Worktree activo:** `worktrees/browser-extension` en la rama `feat/browser-extension`.
-- **Estado de pruebas actual:** La suite en `tests/*.test.js` cuenta exactamente con **98 pruebas** automatizadas que pasan al 100% de forma determinista (`node --test tests/*.test.js`). Esto incluye las 73 pruebas baseline de seguridad iniciales y 25 pruebas de integración de sesión, ordenamiento de concurrencia, TTL mínimo, y auditoría en memoria del empaquetado ZIP.
+- **Estado de pruebas actual:** La suite en `tests/*.test.js` cuenta exactamente con **111 pruebas automatizadas pasando al 100%** (`node --test tests/*.test.js`). La validación en vivo de Chrome, el portapapeles y una cuenta real siguen pendientes.
 - **Estado de entrega:** Cambios locales preservados en el árbol de trabajo para revisión del usuario y del Lead; sin `git commit` ni `git push` en esta etapa de implementación.
 
 ### 1.2. Delimitación Epistemológica de Contextos
@@ -27,10 +27,20 @@ Para mantener rigor técnico y trazabilidad, este documento distingue formalment
    - Observación: `curl.exe -sI https://platzi.com` emitió `HTTP 403` con cabecera `Server: cloudflare`.
    - Límite: Muestra únicamente el comportamiento del perímetro ante clientes de consola; no refleja el comportamiento del navegador del usuario.
 3. **`unitmocks` (Pruebas unitarias sintéticas):**
-   - 98 pruebas en Node.js que validan contratos de esquema, ordenamiento monótono de peticiones, acotación por mínimo de expiración (`getSessionValidityDeadline`), aislamiento de errores 401/403, e invalidación por rotación de época/cuenta.
+   - La suite en Node.js valida contratos de esquema, ordenamiento monótono de peticiones, acotación por mínimo de expiración (`getSessionValidityDeadline`), aislamiento de errores 401/403, e invalidación por rotación de época/cuenta, incluyendo regresiones de respuestas tardías y diagnóstico sanitizado.
 4. **`liveextensionpending` (Extensión real en Chrome Manifest V3):**
    - La extensión empaquetada cargada como desempaquetada desde `dist/` en `chrome://extensions`.
-   - Su capacidad para adjuntar cookies de sesión en `fetch()` cross-origin depende de la confirmación humana mediante el protocolo de diagnóstico.
+   - La observación disponible de UPSE registra `404` con cuerpo vacío para el GET simple; esto es evidencia de una respuesta concreta, no confirmación de funcionalidad de sesión. La prueba controlada con build reciente, pestaña nueva y cuenta real continúa pendiente.
+
+### 1.2.1. Comparación observada del endpoint de sesión
+
+Se conservaron únicamente estados agregados de tres contextos observados por el usuario:
+
+- El frontend oficial de Platzi con sesión emitió `200` y una raíz JSON con `isAuthenticated` y campos de estado.
+- Un `fetch` GET simple desde la pestaña oficial emitió `404`; el cuerpo no fue confirmado.
+- El `fetch` GET simple de UPSE emitió `404` con cuerpo vacío.
+
+Esto confirma una diferencia de respuesta entre el flujo oficial y las solicitudes simples, pero no prueba que una cabecera ausente sea la causa única ni que el resultado sea exclusivo de la extensión. No se reportan URL completas con query, cabeceras, cookies, cuerpos ni IDs. Hasta observar una respuesta autoritativa de acceso a la clase premium, el estado de clase y exportación sigue siendo `UNKNOWN`.
 
 ---
 
@@ -40,16 +50,29 @@ Para mantener rigor técnico y trazabilidad, este documento distingue formalment
 
 1. **Platzi - Términos y Condiciones de Uso:**
    - **URL Oficial:** [`https://platzi.com/terminos/`](https://platzi.com/terminos/) (Octubre 2026).
-   - **Términos contrastados:** Secciones 2, 3 y 5 reservan los derechos de propiedad intelectual sobre materiales audiovisuales y textuales. No se autoriza copia o distribución fuera del uso personal durante la vigencia de la suscripción.
-   - **Límite evidencial:** No se identificó ni verificó autorización aplicable para exportación masiva o almacenamiento de subtítulos de video fuera de la plataforma; por ende, las compuertas de exportación de UPSE se mantienen *fail-closed*.
+   - **Términos contrastados:** Secciones 2, 3 y 5 describen el tratamiento de materiales audiovisuales y textuales. La fuente consultada no aporta un contrato técnico de autorización para exportar subtítulos desde UPSE.
+   - **Límite evidencial:** No se identificó ni verificó autorización aplicable para exportación masiva o almacenamiento de subtítulos de video fuera de la plataforma; por ese límite de evidencia, las compuertas de exportación de UPSE se mantienen *fail-closed*.
 2. **Google Chrome Extensions Manifest V3 - Declaración de Permisos:**
    - **URL Oficial:** [`https://developer.chrome.com/docs/extensions/develop/manifest/permissions`](https://developer.chrome.com/docs/extensions/develop/manifest/permissions)
    - Host permissions: `"https://api.platzi.com/*"` en `public/manifest.json` otorga privilegio de red para peticiones cross-origin iniciadas desde páginas de la extensión.
-   - Principio de mínimos privilegios: No se requiere ni solicita el permiso `"cookies"`, ya que `fetch()` nativo con `credentials: 'include'` utiliza el jar de cookies de red del navegador conforme a las directivas de Chrome.
-   - Permiso `"clipboardWrite"` no se requiere para contextos de activación de usuario inmediata en páginas de extensión; UPSE utiliza preflight inmediato y captura excepciones (`NotAllowedError`).
+   - Principio de mínimos privilegios: UPSE no solicita el permiso `"cookies"`. La adjunción efectiva de cookies en una petición de extensión depende de las políticas del navegador y del perfil; su presencia no se asume ni se interpreta como permiso de clase.
+   - Permiso `"clipboardWrite"` no se requiere para contextos de activación de usuario inmediata en páginas de extensión; UPSE llama de forma inmediata y captura excepciones (`NotAllowedError`). Esto no prueba que la activación transitoria sobreviva a esperas asíncronas ni que todos los perfiles concedan el mismo resultado.
 3. **Peticiones Cross-Origin en Extensiones MV3:**
    - **URL Oficial:** [`https://developer.chrome.com/docs/extensions/develop/concepts/network-requests`](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests)
    - Las páginas de extensión (popups, opciones, pestañas dedicadas) ejecutan peticiones cross-origin mediante `fetch()`. Cuando un origen HTTPS está listado en `host_permissions`, las restricciones CORS estándar no bloquean la respuesta, permitiendo inspeccionar status y cuerpo JSON de la API.
+4. **Chrome Storage and Cookies:**
+   - **URL Oficial:** [`https://developer.chrome.com/docs/extensions/develop/concepts/storage-and-cookies`](https://developer.chrome.com/docs/extensions/develop/concepts/storage-and-cookies)
+   - Se consultó para separar la presencia observable de cookies de cualquier conclusión sobre autenticación efectiva. No se solicitó el permiso `cookies` ni se extrajeron valores.
+5. **Página pública de Platzi:**
+   - **URL de referencia:** [`https://platzi.com/`](https://platzi.com/)
+   - Se usó como referencia de navegación pública y no como autoridad de permisos de clase o exportación.
+6. **Página pública de Platzi Business:**
+   - **URL de referencia:** [`https://platzi.com/empresas/`](https://platzi.com/empresas/)
+   - Se revisó como material público de producto; no se trató como documentación de API, OAuth o delegación de permisos.
+
+### 2.2.1. Búsqueda acotada de flujo soportado
+
+Se revisaron las fuentes primarias anteriores y las rutas observadas en el flujo oficial, sin reintentar solicitudes con cabeceras inventadas, sin replay de peticiones y sin manipular respuestas. La búsqueda de autenticación de sesión, incluyendo posibles flujos OAuth, API o delegación documentados, no identificó un flujo aplicable entre las fuentes consultadas. La evidencia de acceso a clase y la autorización de exportación se evalúan por separado y continúan requiriendo pruebas autoritativas independientes. La búsqueda queda acotada a estas fuentes y no afirma la inexistencia absoluta de otros flujos internos.
 
 ---
 
@@ -61,6 +84,8 @@ Para mantener rigor técnico y trazabilidad, este documento distingue formalment
 | **B. Metadatos Públicos de Catálogo** | SSR HTML contiene `<title>`, `canonicalUrl` y eventos analíticos con `course_id`, `class_id`. | **Implementado** (`resolvePublicClassIdentity`). Consulta con `credentials: 'omit'` y extrae identidad pública de clase sin exigir sesión activa. | No otorga permiso de reproducción ni revela URLs de video protegidas. |
 | **C. Recursos Diagnósticos (`links-files`)** | `userliveChrome`: `GET /materials/v1/{classId}/course/{courseId}/links-files/` responde 200 en Empresarial y 403 en Free para clases privadas. | **Implementado como sonda diagnóstica** (`checkResourceDiagnostics`). Registra recurso disponible o denegado sin leer cuerpo de respuesta. | **No prueba completitud semántica ni otorga reproducción (`canView`) ni exportación (`canExportSubtitles`).** |
 | **D. Acceso de Video y Exportación** | Términos de uso reservan derechos. No se identificó ni verificó contrato público ni autorización aplicable para descarga de transcripciones. | **Fail-Closed estricto** (`UNKNOWN` -> `DENY`). `checkClassAccess` y `checkExportPermission` mantienen denegación por defecto. | Bloqueado por seguridad; sin emisión de pruebas sintéticas de exportación no autorizadas. |
+| **E. Diagnóstico UI y portapapeles** | Estados sanitizados y `navigator.clipboard.writeText()` solo tras validación de la operación, con éxito/error explícitos. | **Implementado y probado** en callback unitario con promesas diferidas, con mensajes ES/EN y reduced motion heredado. | Requiere validación manual en Chrome para activación transitoria y permisos efectivos. |
+| **F. Evidencia real de Chrome** | Frontend oficial `200`; fetch simple oficial `404` con cuerpo no confirmado; UPSE `404` con cuerpo vacío. | **Pendiente** para una pestaña nueva de extensión cargada desde `dist`; el `404` actual no se considera funcionalidad confirmada. | No se puede seleccionar adaptador premium sin comparar respuestas autoritativas de la misma clase. |
 
 ---
 
@@ -142,7 +167,7 @@ flowchart TD
 - Validación defensiva de respuesta:
   - Inspección de `response.url`: Exige origen `https://api.platzi.com`, ruta exacta `/api/v1/components/header/v2/user/`, y rechaza cualquier query string (`?redirect=...`) o fragmento hash (`#...`).
   - Verificación estricta de MIME: Si la cabecera `Content-Type` está ausente o no contiene `application/json`, la respuesta se rechaza como `NON_JSON_CONTENT_TYPE`.
-  - En errores de red o redirección denegada, retorna `unknown` con motivo sanitizado sin exponer cuerpos de error ni cabeceras.
+   - En errores de red o redirección denegada, retorna `unknown` con motivo sanitizado sin exponer cuerpos de error ni cabeceras. `NETWORK_ERROR` solo describe que `fetch()` no produjo una respuesta observable; no identifica si la causa fue red, CORS, permisos del navegador, cookies, contexto de extensión u otra condición no observable.
 
 ### 5.4. Sonda Diagnóstica de Recursos (`checkResourceDiagnostics`) (Hallazgo 4)
 - Exige identidad numérica positiva de clase y curso (`classId > 0`, `courseId > 0`).

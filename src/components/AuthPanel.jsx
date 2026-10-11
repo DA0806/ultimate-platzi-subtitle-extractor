@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { ExternalLink, Globe2, Moon, RefreshCw, Sun, Trash2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Clipboard, ExternalLink, Globe2, Moon, RefreshCw, Sun, Trash2, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSettingsStore } from '../store/settingsStore';
 import { Button } from './ui/Button';
@@ -7,6 +7,16 @@ import { SessionBadge } from './SessionBadge';
 import { InterfaceLanguageSelect } from './InterfaceLanguageSelect';
 import { useI18n } from '../i18n';
 import { clearAppStorage } from '../utils/appStorage.js';
+import { formatDiagnosticReport } from '../utils/platziSessionAdapter.js';
+import { getVersionInfo } from '../utils/version.js';
+import { copyDiagnosticReport } from '../utils/diagnosticClipboard.js';
+
+const diagnosticReasonKeys = new Set([
+  'HTTP_404', 'HTTP_403', 'HTTP_401', 'HTTP_429', 'HTTP_OTHER', 'TIMEOUT', 'ABORTED',
+  'NETWORK_ERROR', 'READ_BODY_FAILED', 'EXTENSION_ONLY_AUTH', 'NON_JSON_CONTENT_TYPE', 'INVALID_JSON', 'INVALID_ROOT_SCHEMA',
+  'INVALID_USER_ID', 'REDIRECT_INVALID', 'STALE_REQUEST', 'SESSION_EPOCH_MISMATCH',
+  'ACCOUNT_CHANGED', 'OK', 'UNKNOWN',
+]);
 
 export const AuthPanel = ({
   isOpen,
@@ -14,11 +24,15 @@ export const AuthPanel = ({
   triggerRef,
   embedded = false,
 }) => {
-  const { recheckSession, logout } = useAuth();
+  const { recheckSession, logout, isVerifying, lastDiagnostic } = useAuth();
   const theme = useSettingsStore(state => state.theme);
   const toggleTheme = useSettingsStore(state => state.toggleTheme);
   const panelRef = useRef(null);
   const { t, language } = useI18n();
+  const [copyState, setCopyState] = useState({ report: '', status: 'idle' });
+  const versionInfo = getVersionInfo();
+  const diagnosticReport = lastDiagnostic ? formatDiagnosticReport(lastDiagnostic) : '';
+  const visibleCopyState = copyState.report === diagnosticReport ? copyState.status : 'idle';
 
   useEffect(() => {
     if (!isOpen || embedded) return undefined;
@@ -95,6 +109,19 @@ export const AuthPanel = ({
     window.location.reload();
   };
 
+  const diagnosticMessageKey = lastDiagnostic?.reason === 'OK'
+    ? (lastDiagnostic.authStatus === 'authenticated'
+      ? 'session.diagnostic.OK_AUTHENTICATED'
+      : 'session.diagnostic.OK_UNAUTHENTICATED')
+    : (diagnosticReasonKeys.has(lastDiagnostic?.reason)
+      ? `session.diagnostic.${lastDiagnostic.reason}`
+      : 'session.diagnostic.UNKNOWN');
+
+  const copyDiagnostic = async () => {
+    const result = await copyDiagnosticReport(diagnosticReport);
+    setCopyState({ report: diagnosticReport, status: result.status });
+  };
+
   const renderSessionSection = () => (
     <div className="flex flex-col gap-4 rounded-lg border border-border/80 bg-secondary/30 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -109,6 +136,9 @@ export const AuthPanel = ({
           <SessionBadge />
         </div>
       </div>
+      <p className="text-xs text-muted-foreground" aria-label={t('session.versionLabel')}>
+        {t('session.versionLabel')}: {versionInfo.codeVersion} · {t('session.versionManifest')}: {versionInfo.manifestVersion || t('session.versionUnavailable')}
+      </p>
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/50 pt-3">
         <Button
@@ -126,12 +156,39 @@ export const AuthPanel = ({
           variant="default"
           size="sm"
           onClick={recheckSession}
+          loading={isVerifying}
+          disabled={isVerifying}
           className="gap-1.5"
         >
           <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-          {t('session.recheck')}
+          {isVerifying ? t('session.verifying') : t('session.recheck')}
         </Button>
       </div>
+      {isVerifying && (
+        <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+          {t('session.verifying')}
+        </p>
+      )}
+      {!isVerifying && lastDiagnostic && (
+        <div className="space-y-2 border-t border-border/50 pt-3" aria-live="polite">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-medium text-foreground">{t('session.diagnosticTitle')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t(diagnosticMessageKey)}</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={copyDiagnostic} className="gap-1.5">
+              <Clipboard className="h-3.5 w-3.5" aria-hidden="true" />
+              {visibleCopyState === 'copied' ? t('session.copyDiagnosticDone') : t('session.copyDiagnostic')}
+            </Button>
+          </div>
+          {visibleCopyState === 'unavailable' && (
+            <p className="text-xs text-destructive" role="alert">{t('session.copyDiagnosticUnavailable')}</p>
+          )}
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-background/70 p-3 font-mono text-[10px] leading-4 text-muted-foreground">
+            {diagnosticReport}
+          </pre>
+        </div>
+      )}
     </div>
   );
 
