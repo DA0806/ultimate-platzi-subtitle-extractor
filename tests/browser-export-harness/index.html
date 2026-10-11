@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UPSE isolated export harness</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 2rem auto; max-width: 58rem; padding: 0 1rem; }
+      button { cursor: pointer; margin: .35rem; padding: .7rem 1rem; }
+      #status { min-height: 5rem; padding: 1rem; white-space: pre-wrap; border: 1px solid #888; }
+      .warning { color: #b04a00; }
+      code { overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <h1>UPSE isolated export harness</h1>
+    <p class="warning"><strong>AUTH_SIMULATED</strong>: test-only page. It is outside the extension build and never grants production authorization.</p>
+    <p>These controls call the production exporter functions with synthetic VTT fixtures. No Platzi account, cookie, token or remote subtitle is used.</p>
+    <p>Run: <code id="run-id"></code></p>
+    <div aria-label="Export controls">
+      <button id="individual" type="button">Export individual TXT</button>
+      <button id="merged" type="button">Export combined TXT</button>
+      <button id="zip" type="button">Export ZIP</button>
+      <button id="clipboard" type="button">Copy combined TXT</button>
+    </div>
+    <pre id="status" role="status" aria-live="polite">Loading synthetic fixtures…</pre>
+    <script type="module" src="/tests/browser-export-harness/entry.js"></script>
+  </body>
+</html>

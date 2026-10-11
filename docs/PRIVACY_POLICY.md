@@ -1,5 +1,7 @@
 # Política de Privacidad de UPSE
 
+La versión experimental 1.0.10 se distribuye mediante GitHub Releases para instalación manual. Las referencias a Chrome Web Store en este documento describen requisitos históricos y no significan que exista una publicación o revisión de tienda.
+
 **Fecha de vigencia:** 10 de octubre de 2026
 **Producto:** Ultimate Platzi Subtitle Extractor (UPSE) 1.0.7, extensión local para navegadores Chromium
 **Contacto:** <https://github.com/DA0806/ultimate-platzi-subtitle-extractor/issues>

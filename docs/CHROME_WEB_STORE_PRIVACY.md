@@ -1,4 +1,6 @@
-# Guía Preparada para la Privacidad de Chrome Web Store
+# Guía histórica de privacidad para Chrome Web Store
+
+Este documento se conserva como referencia histórica. La distribución vigente de UPSE 1.0.10 es experimental mediante GitHub Releases e instalación manual en Edge o Chrome; no depende de la Chrome Web Store.
 
 **Producto:** UPSE 1.0.7
 **Fecha de preparación:** 10 de octubre de 2026

@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.0.9';
+export const APP_VERSION = '1.0.10';
 
 const readManifestVersion = () => {
   if (typeof globalThis.chrome !== 'undefined' && typeof globalThis.chrome?.runtime?.getManifest === 'function') {

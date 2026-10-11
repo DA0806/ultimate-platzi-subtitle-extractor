@@ -1,8 +1,18 @@
-# Ultimate Platzi Subtitle Extractor (UPSE)
+# Ultimate Platzi Subtitle Extractor (UPSE) 1.0.10 experimental
+
+UPSE is distributed experimentally through GitHub Releases for manual installation in Microsoft Edge and Chrome. Chrome Web Store publication is currently out of scope.
+
+The release is functional as a Chromium extension and its TXT, combined TXT, ZIP, and Clipboard exporters are covered by isolated tests using synthetic subtitle fixtures. Direct extraction from restricted Platzi classes remains fail-closed: session authentication, course access, class playback access, and permission to export subtitles are separate capabilities. UPSE does not treat a 200 response, a browser cookie, a premium/business plan, a media URL, or playback as permission to copy subtitles.
+
+Install the ZIP from the [experimental releases](https://github.com/DA0806/ultimate-platzi-subtitle-extractor/releases), then follow [`docs/EXTENSION_GUIDE.md`](docs/EXTENSION_GUIDE.md). Verify the adjacent SHA-256 file before loading the unpacked directory. See [`docs/RELEASE_NOTES_EXPERIMENTAL.md`](docs/RELEASE_NOTES_EXPERIMENTAL.md), [`LICENSE`](LICENSE), and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+The current product requirement that remains open is a provider-supported, class-bound signal for subtitle extraction/export from Platzi. The repository documents the evidence and keeps unknown authorization as deny; it does not include a simulated authorization switch or a local file converter as a replacement for the Platzi integration.
+
+Browser evidence is separated by purpose. Edge DevTools MCP installed and opened UPSE 1.0.10, verified the native authenticated session with HTTP 200 JSON and exercised the real TXT, combined TXT and ZIP file effects plus Clipboard write using synthetic fixtures. Chrome for Testing independently completed the four exporter side effects in a temporary profile and blocked a revoked proof before download. The harness authorization is test-only and does not grant production access; neither run authorizes export from Platzi.
 
 ## Extensión de Chrome
 
-La versión 1.0.7 implementa una arquitectura de autorización cerrada por defecto basada en separación de capacidades, verificación independiente de identidad y defensas efímeras en memoria:
+La versión 1.0.10 implementa una arquitectura de autorización cerrada por defecto basada en separación de capacidades, verificación independiente de identidad y defensas efímeras en memoria:
 
 ```bash
 npm run build:extension
@@ -20,7 +30,7 @@ La extensión funciona de manera autónoma sin requerir servidores locales ni pr
 
 ## Arquitectura de Autorización y Separación de Capacidades
 
-A diferencia de modelos binarios o basados en scraping heurístico, UPSE 1.0.7 implementa una arquitectura formal de autorización alineada con las directivas de seguridad de Manifest V3:
+A diferencia de modelos binarios o basados en scraping heurístico, UPSE 1.0.10 implementa una arquitectura formal de autorización alineada con las directivas de seguridad de Manifest V3:
 
 ### 1. Modelo de Triple Permiso (`CapabilityDecision`)
 Toda operación sensible de acceso y extracción requiere la verificación estricta de tres facultades independientes:
@@ -105,7 +115,7 @@ Scripts disponibles:
 | `npm run build:extension` | Compila la extensión MV3 y empaqueta el artefacto `dist/upse-extension.zip`. |
 | `npm run preview` | Previsualiza los archivos compilados de producción. |
 | `npm run lint` | Ejecuta ESLint con reglas estrictas (cero errores o advertencias). |
-| `node --test tests/*.test.js` | Ejecuta la suite de pruebas unitarias y de ciclo de vida (54 pruebas locales sin red en la validación del 10 de octubre de 2026). |
+| `node --test tests/*.test.js` | Ejecuta la suite de pruebas unitarias y de ciclo de vida (116 pruebas locales sin red en la validación de esta entrega). |
 
 ---
 

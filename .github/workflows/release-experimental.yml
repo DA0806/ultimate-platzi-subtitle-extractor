@@ -1,0 +1,44 @@
+name: Experimental release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*-experimental.*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
+      - run: npm run check:licenses
+      - run: npm run lint
+      - run: node --test tests/*.test.js
+      - run: npm run build:extension
+      - run: node scripts/write-sha256.mjs dist/upse-extension.zip
+      - run: npm run check:package
+      - name: Install Playwright Chromium for isolated browser E2E
+        run: npx playwright install --with-deps chromium
+      - name: Run isolated browser export E2E
+        run: npm run test:browser-export
+      - name: Create prerelease with GitHub CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          dist/upse-extension.zip
+          dist/upse-extension.zip.sha256
+          --title "UPSE $GITHUB_REF_NAME"
+          --notes-file docs/RELEASE_NOTES_EXPERIMENTAL.md
+          --prerelease
+          --verify-tag

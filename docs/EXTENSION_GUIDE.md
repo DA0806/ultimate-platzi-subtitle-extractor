@@ -1,6 +1,10 @@
-# Guía de la extensión UPSE 1.0.7
+# Guía de la extensión UPSE 1.0.10 experimental
 
-Esta guía describe la extensión Manifest V3 de Ultimate Platzi Subtitle Extractor (UPSE), su instalación local y sus dos modos de acceso. La entrega está preparada para revisión; todavía no significa que la extensión haya sido publicada o aprobada por Chrome Web Store.
+Esta entrega se distribuye por GitHub Releases para instalación manual en Edge o Chrome. No depende de Chrome Web Store y no debe interpretarse como autorización de Platzi para copiar subtítulos.
+
+El ZIP de la release contiene la extensión compilada y sus avisos de licencia (`LICENSE`, `THIRD_PARTY_NOTICES.md`, `THIRD_PARTY_FALLBACK_NOTICES.md` y `THIRD_PARTY_LICENSES/`). Los permisos simulados y fixtures del harness están fuera de `dist/` y el comprobador de paquete rechaza cualquier marcador de autorización de pruebas antes de una release.
+
+Esta guía describe la extensión Manifest V3 de Ultimate Platzi Subtitle Extractor (UPSE), su instalación local y sus dos modos de acceso. La entrega experimental se publica mediante GitHub Releases; no depende de una revisión o publicación en Chrome Web Store.
 
 ## Qué hace la extensión
 
@@ -67,3 +71,13 @@ La extensión procesa URLs, HTML y VTT para extraer subtítulos, y mantiene pref
 - La misma comprobación recibió `403` en `/api/v5/users/credentials/` y `/plans/v1/table-price/` sin sesión. Se bloquearon solicitudes `.m3u8`, `.vtt`, video y audio antes de leerlas. No se copió ningún perfil ni cookie y no se ejecutó un reproductor.
 - El campo `class_is_free:false` no fue probado con una cuenta de pago; por eso UPSE lo bloquea de forma conservadora aunque la cuenta pudiera tener derechos. No se afirma que una sesión de pago quede validada ni que UPSE pueda distinguir suscripciones.
 - Sigue pendiente una prueba automatizada autenticada en un perfil limpio con una cuenta autorizada. No se copian credenciales del perfil del usuario para realizarla.
+
+## Pruebas de exportación y alcance de la release experimental
+
+La suite local [`tests/exportHarness.test.js`](../tests/exportHarness.test.js) usa las funciones reales de exportación con dos fixtures sintéticos originales y un adaptador autorizado creado dentro de la prueba. Captura efectos de archivo reales en un directorio temporal, inspecciona el ZIP y espera la promesa de Clipboard; no habilita ningún permiso en la extensión ni entra en `dist/`. La prueba no es evidencia de autorización de Platzi.
+
+Para una comprobación de navegador separada, ejecuta `npm run test:browser-export` con un perfil temporal de Chrome for Testing (o configura `UPSE_BROWSER_EXECUTABLE_PATH` para otro binario Chromium). El runner levanta un servidor loopback y usa la página canónica `tests/browser-export-harness/index.html`. Pulsa cada botón una vez: el TXT individual debe terminar con `-clase-01-primera.es.txt`, el combinado con `-es.txt` y el ZIP con `.zip`, todos con el prefijo `harness-<timestamp>`. El runner espera el evento real de descarga, guarda cada archivo en un directorio temporal propio y lee únicamente el texto sintético que la prueba acaba de crear. El harness y su autorización simulada están fuera de `dist/`, y el comprobador de paquete rechaza sus marcadores.
+
+La verificación de sesión 1.0.10 en Edge está documentada en [`PLATZI_CHROME_SESSION_DIAGNOSTIC.md`](PLATZI_CHROME_SESSION_DIAGNOSTIC.md): la re-verificación nativa produjo HTTP 200 JSON autenticado y la extensión se mantuvo sin errores ni advertencias de consola. La investigación acotada posterior no obtuvo una señal class-bound: los candidatos observados siguen exponiendo `class_is_free` y no un entitlement empresarial verificable. La integración directa permanece preparada para una futura fuente oficial, pero no extrae ni exporta clases restringidas mientras esa fuente no exista.
+
+Las releases se generan sólo para tags `vX.Y.Z-experimental.N` cuya versión estable coincide con `package.json` y `manifest.json`. El workflow genera el SHA-256 antes del comprobador, que compara el contenido real del ZIP con el archivo de suma. Cada ZIP incluye `LICENSE`, `THIRD_PARTY_NOTICES.md` y `THIRD_PARTY_LICENSES/`; los resultados del harness Edge y Chrome for Testing se conservan como evidencias separadas y usan fixtures propios. La etiqueta experimental no significa que Platzi haya autorizado la exportación.

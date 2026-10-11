@@ -1,12 +1,16 @@
 {
   "name": "ultimate-platzi-subtitle-extractor--upse-",
   "private": true,
-  "version": "1.0.9",
+  "version": "1.0.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:extension": "npm run build && node scripts/package-extension.mjs",
+    "check:package": "node scripts/check-extension-package.mjs",
+    "test:browser-export": "node scripts/run-browser-export-e2e.mjs",
+    "check:licenses": "node scripts/check-third-party-licenses.mjs",
+    "check:release": "npm run lint && npm run check:licenses && node --test tests/*.test.js && npm run build:extension && node scripts/write-sha256.mjs dist/upse-extension.zip && npm run check:package",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -16,7 +20,6 @@
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
     "lucide-react": "^1.14.0",
-    "playwright": "^1.60.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "zustand": "^5.0.13"
@@ -33,6 +36,7 @@
     "globals": "^17.6.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.19",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "playwright": "1.60.0"
   }
 }

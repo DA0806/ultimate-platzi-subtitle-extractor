@@ -33,7 +33,7 @@ afterEach(() => {
 
 const enableExtensionMode = () => {
   globalThis.location = { protocol: 'chrome-extension:' };
-  globalThis.chrome = { runtime: { id: 'test-extension-upse', getManifest: () => ({ version: '1.0.9' }) } };
+  globalThis.chrome = { runtime: { id: 'test-extension-upse', getManifest: () => ({ version: '1.0.10' }) } };
 };
 
 test('RED proof 1: authStore exposes isVerifying and lastDiagnostic, and clears them on logout/invalidate', () => {
@@ -79,8 +79,8 @@ test('RED proof 1b: SSR-rendered AuthPanel exposes pending verification and disa
     assert.match(markup, /role="status"/);
     assert.match(markup, /aria-live="polite"/);
     assert.match(markup, /disabled=""/);
-    assert.match(markup, /Versión de código: 1\.0\.9/);
-    assert.match(markup, /manifest: 1\.0\.9/);
+    assert.match(markup, /Versión de código: 1\.0\.10/);
+    assert.match(markup, /manifest: 1\.0\.10/);
 
     const fixtureState = globalThis.__upseSessionUiFixtureState;
     fixtureState.isVerifying = false;
@@ -349,7 +349,7 @@ test('RED proof 6: formatDiagnosticReport produces sanitized exact whitelist tex
   const formatted = formatDiagnosticReport(diag);
   const expected = [
     'Entorno: Chrome Extension',
-    'Versión código: 1.0.9',
+    'Versión código: 1.0.10',
     'Versión manifest: no disponible',
     'Endpoint: headerv2/user/',
     'Método: GET',
@@ -380,7 +380,7 @@ test('RED proof 6: formatDiagnosticReport produces sanitized exact whitelist tex
   assert.equal(hostile.includes('evil.invalid'), false);
 });
 
-test('RED proof 7: version synchronization matches 1.0.9 across package.json and manifest.json', async () => {
+test('RED proof 7: version synchronization matches 1.0.10 across package.json and manifest.json', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const manifest = JSON.parse(await readFile(new URL('../public/manifest.json', import.meta.url), 'utf8'));
 
