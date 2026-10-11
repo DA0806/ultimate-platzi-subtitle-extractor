@@ -3,7 +3,7 @@
 - **Documento:** `docs/PLATZI_CHROME_SESSION_DIAGNOSTIC.md`
 - **Ubicación:** `worktrees/browser-extension/docs/PLATZI_CHROME_SESSION_DIAGNOSTIC.md`
 - **Rama de trabajo:** `feat/browser-extension`
-- **Fecha:** 10 de octubre de 2026 (Fase de validación previa al commit)
+- **Fecha:** 10 de octubre de 2026 (validación manual real posterior a recarga)
 - **Propósito:** Definir el procedimiento seguro de inspección manual en Google Chrome DevTools para determinar las diferencias exactas de respuesta del servidor de Platzi entre acceso autorizado y denegado en una misma clase premium, validando el adaptador de sesión de cabecera implementado y preservando el principio *fail-closed* en acceso a clases y exportación.
 
 ---
@@ -25,21 +25,22 @@ Conforme a la instrucción autorizada:
    - Se sanitizaron los registros de depuración en consola en `useSubtitleExtractor.js` (emitiendo únicamente `{ code, status, classSlug }`, sin URLs firmadas completas ni cuerpos de error).
    - Se implementó la acotación de expiración por mínimo (`getSessionValidityDeadline`) garantizando que el TTL de observación local no extienda expiraciones de servidor reales.
    - Se implementó un control estricto de concurrencia y ordenamiento monótono de peticiones en el adaptador de sesión, evitando que peticiones demoradas sobrescriban estados más recientes o logouts.
-   - La suite cuenta con **111 pruebas automatizadas pasando al 100%** (`node --test tests/*.test.js`). La validación de Chrome, portapapeles y cuenta real sigue pendiente de ejecución manual.
+   - La suite cuenta con **111 pruebas automatizadas pasando al 100%** (`node --test tests/*.test.js`). La recarga manual de la extensión en Chrome ya produjo un diagnóstico real; las pruebas completas de interacción Chrome, portapapeles y acceso de clase con cuenta real siguen pendientes.
 
 2. **Estado de Adaptadores: Sesión Nativa Implementada vs. Acceso/Exportación Fail-Closed:**
-   - **Adaptador de Sesión de Cabecera (`PlatziSessionAdapter`):** Implementado en `src/utils/platziSessionAdapter.js` y conectado a `defaultAuthorizationService.adapter.checkSession()`. Emplea el endpoint observado por el usuario en Chrome DevTools (`GET https://api.platzi.com/api/v1/components/header/v2/user/`) con validación de esquema raíz estricto (`isAuthenticated`, `userId`), in-memory account binding, frescura local de 30s, y opciones de red estrictas (`redirect: 'error'`, `cache: 'no-store'`). Su comportamiento dentro de la extensión con una sesión real sigue pendiente de la prueba manual (`liveextensionpending`).
+   - **Adaptador de Sesión de Cabecera (`PlatziSessionAdapter`):** Implementado en `src/utils/platziSessionAdapter.js` y conectado a `defaultAuthorizationService.adapter.checkSession()`. Emplea el endpoint observado por el usuario en Chrome DevTools (`GET https://api.platzi.com/api/v1/components/header/v2/user/`) con validación de esquema raíz estricto (`isAuthenticated`, `userId`), in-memory account binding, frescura local de 30s, y opciones de red estrictas (`redirect: 'error'`, `cache: 'no-store'`). En la recarga manual real con código y manifest `1.0.8`, emitió `HTTP 404`, respuesta `HTML`, autenticación `UNKNOWN` y motivo `HTTP_404`; esto valida el reporte y la versión cargada, no la autenticación ni el acceso a clase.
    - **Adaptadores de Acceso a Clase y Exportación (`checkClassAccess`, `checkExportPermission`):** Permanecen estrictamente en **`UNKNOWN` (Fail-Closed, default denial)**. No se identificó ni verificó un contrato de servidor aplicable que otorgue autoridad sobre reproducción de video o exportación de subtítulos protegidos. El adaptador definitivo de clase completa continúa pendiente.
 
-### 1.3. Evidencia nueva de sesión (tres contextos)
+### 1.3. Evidencia nueva de sesión (cuatro contextos)
 
-El usuario observó el mismo endpoint de sesión en tres contextos, sin compartir cuerpos completos, cabeceras ni identificadores:
+El usuario observó el mismo endpoint de sesión en cuatro contextos, sin compartir cuerpos completos, cabeceras ni identificadores:
 
 | Contexto | Resultado sanitizado | Qué permite concluir |
 | :--- | :--- | :--- |
 | Frontend oficial de Platzi, con sesión | `200`, JSON raíz con `isAuthenticated` y campos de estado | El frontend oficial recibió una respuesta de sesión válida en ese contexto. |
 | Consola de la página oficial, `fetch` GET simple | `404`, cuerpo no confirmado | El endpoint no es reproducible con esa solicitud simple; no demuestra por sí solo la causa del rechazo. |
-| UPSE en la página de extensión, `fetch` GET simple | `404`, cuerpo vacío | La extensión no obtuvo una respuesta de sesión válida en esa prueba. Cookie presence no equivale a autenticación suficiente. |
+| UPSE en la página de extensión, `fetch` GET simple anterior | `404`, respuesta apareció vacía en DevTools | La extensión no obtuvo una respuesta de sesión válida en esa prueba. Cookie presence no equivale a autenticación suficiente. |
+| UPSE recargada en Chrome con código/manifest `1.0.8` | `404`, respuesta `HTML`, autenticación `UNKNOWN`, motivo `HTTP_404` | Confirma que la nueva UI cargó el código y manifest esperados y que el reporte whitelistado puede copiarse; no confirma autenticación, acceso a clase ni exportación. |
 
 La evidencia no demuestra que la ausencia de una cabecera concreta sea la única causa, ni que el comportamiento sea exclusivo de la extensión. No se ha elegido un adaptador definitivo de acceso premium; el procedimiento manual debe comparar las respuestas autoritativas de la clase antes de ampliar permisos o exportación.
 
@@ -48,7 +49,8 @@ La evidencia no demuestra que la ausencia de una cabecera concreta sea la única
 | Contexto | `Cookie` | `Origin` | `api-authorization` | Resultado |
 | :--- | :--- | :--- | :--- | :--- |
 | Frontend oficial de Platzi | No visible en el reporte | Visible | Visible | `200` con raíz JSON de sesión |
-| Fetch simple de UPSE/extensión | Visible | No visible | No visible | `404`, cuerpo vacío |
+| Fetch simple de UPSE/extensión anterior | Visible | No visible | No visible | `404`, respuesta apareció vacía en DevTools |
+| UPSE/extensión recargada `1.0.8` | No reportado | No reportado | No reportado | `404`, respuesta `HTML`, `UNKNOWN/HTTP_404` |
 
 “No visible” significa que el usuario no reportó esa cabecera en la observación; no significa que se haya demostrado su ausencia en la red. Cookie presence tampoco demuestra que la solicitud sea autenticada o que otorgue acceso a una clase.
 
@@ -57,7 +59,7 @@ La evidencia no demuestra que la ausencia de una cabecera concreta sea la única
 | Hipótesis | Evidencia actual | Faltante | Verificación segura | Estado |
 | :--- | :--- | :--- | :--- | :--- |
 | H1. La API exige credenciales de aplicación adicionales a las cookies | Frontend oficial reportó `Origin` y `api-authorization`; UPSE reportó una cookie visible sin esas cabeceras | Si esas señales son requisito, cuál y para qué operación | Comparar solicitudes normales en Network sin copiar valores ni fabricar cabeceras | No demostrado |
-| H2. El `404` proviene de un gateway deliberado por faltar autenticación o contexto | Fetch simple oficial emitió `404`; cuerpo no confirmado; UPSE emitió `404` con cuerpo vacío | Evidencia del gateway y del contexto que produce el estado | Comparar respuesta y redirección de los flujos oficiales, sin replay ni manipulación | No demostrado |
+| H2. El `404` proviene de un gateway deliberado por faltar autenticación o contexto | Fetch simple oficial emitió `404`; cuerpo no confirmado; UPSE emitió `404` cuya respuesta apareció vacía en DevTools | Evidencia del gateway y del contexto que produce el estado | Comparar respuesta y redirección de los flujos oficiales, sin replay ni manipulación | No demostrado |
 | H3. El endpoint no admite solicitudes desde extensiones de terceros | UPSE emitió `404`, pero el fetch simple oficial también emitió `404` | Diferencia causal entre origen de extensión y origen web | Recheck desde pestaña nueva de extensión y comparación equivalente en web | No demostrado; el 404 web debilita atribución exclusiva |
 | H4. Las cookies son distintas o insuficientes para la operación | Cookie visible en UPSE; no se observaron valores ni reglas de envío | Atributos y políticas efectivas del perfil, sin extraer secretos | Inspección agregada de estado y respuesta, nunca valores de cookies | No demostrado |
 | H5. El navegador diferencia las cabeceras de la solicitud | `Origin`/`api-authorization` fueron reportadas solo en el frontend oficial | Si la diferencia es requerida por el backend o incidental | Comparar presencia agregada de cabeceras en solicitudes normales | No demostrado |
@@ -372,4 +374,4 @@ Si prefiere verificar manualmente desde las DevTools de la extensión (`Inspect 
 ```
 
 ### 8.5. Limitación Factual de Ejecución Automatizada en Entorno Local
-Durante la revisión técnica independiente (Codex), se intentó una verificación en navegador automatizado utilizando Playwright 1.60 y el ejecutable en caché de Chromium 1243 ubicado en `C:\Users\Diego\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe` con un perfil temporal nuevo mediante `launchPersistentContext`. Este intento falló antes del inicio del navegador con el error `spawn UNKNOWN` (la ruta esperada de Playwright para Chromium 1223 estaba obsoleta, y al suministrar la ruta del binario 1243 existente también se produjo el fallo de spawn). En este intento no se reutilizó ningún perfil personal ni Edge, no se manejaron credenciales ni se obtuvo evidencia de DOM, runtime de extensión o endpoints en vivo; fue un intento técnico aislado. Por tanto, la prueba manual de sesión en Chrome continúa pendiente de ejecución por parte del usuario conforme al procedimiento de este documento, y no se ha seleccionado un adaptador de clase definitiva ni otorgado derechos de acceso completos.
+Durante la revisión técnica independiente (Codex), se intentó una verificación en navegador automatizado utilizando Playwright 1.60 y el ejecutable en caché de Chromium 1243 ubicado en `C:\Users\Diego\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe` con un perfil temporal nuevo mediante `launchPersistentContext`. Este intento falló antes del inicio del navegador con el error `spawn UNKNOWN` (la ruta esperada de Playwright para Chromium 1223 estaba obsoleta, y al suministrar la ruta del binario 1243 existente también se produjo el fallo de spawn). En este intento no se reutilizó ningún perfil personal ni Edge, no se manejaron credenciales ni se obtuvo evidencia de DOM, runtime de extensión o endpoints en vivo; fue un intento técnico aislado. La observación manual posterior sí confirmó la recarga `1.0.8`, el reporte whitelistado copiable y la respuesta `HTTP_404` clasificada como `HTML`. No confirmó clicks duplicados, spinner, a11y, cancelación, E2E completo, autenticación ni acceso de clase; no se ha seleccionado un adaptador de clase definitiva ni otorgado derechos de acceso completos.

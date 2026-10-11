@@ -2,9 +2,9 @@
 
 - **Documento:** `docs/PLATZI_SESSION_INTEGRATION_RESEARCH.md`
 - **Ubicación en repositorio:** `worktrees/browser-extension/docs/PLATZI_SESSION_INTEGRATION_RESEARCH.md`
-- **Fecha de actualización:** 10 de octubre de 2026 (Fase de validación previa al commit)
+- **Fecha de actualización:** 10 de octubre de 2026 (validación manual real posterior a recarga)
 - **Rama de trabajo:** `feat/browser-extension` (`worktrees/browser-extension`)
-- **Carácter:** Documentación de Estado Actual e Histórico de Integración; el adaptador de cabecera de sesión nativo (`PlatziSessionAdapter`) está implementado en la rama y cubierto por la suite determinista de esta revisión, con validación en vivo en Chrome pendiente de ejecución por el usuario (`liveextensionpending`).
+- **Carácter:** Documentación de Estado Actual e Histórico de Integración; el adaptador de cabecera de sesión nativo (`PlatziSessionAdapter`) está implementado, cubierto por la suite determinista de esta revisión y observado en una recarga manual real de Chrome. La respuesta observada no confirmó autenticación ni acceso de clase.
 
 ---
 
@@ -12,8 +12,8 @@
 
 ### 1.1. Inspección del Entorno y Suite de Pruebas
 - **Worktree activo:** `worktrees/browser-extension` en la rama `feat/browser-extension`.
-- **Estado de pruebas actual:** La suite en `tests/*.test.js` cuenta exactamente con **111 pruebas automatizadas pasando al 100%** (`node --test tests/*.test.js`). La validación en vivo de Chrome, el portapapeles y una cuenta real siguen pendientes.
-- **Estado de entrega:** Cambios locales preservados en el árbol de trabajo para revisión del usuario y del Lead; sin `git commit` ni `git push` en esta etapa de implementación.
+- **Estado de pruebas actual:** La suite en `tests/*.test.js` cuenta exactamente con **111 pruebas automatizadas pasando al 100%** (`node --test tests/*.test.js`). La recarga manual de la extensión en Chrome ya produjo un diagnóstico real; las pruebas completas de interacción Chrome, portapapeles y acceso de clase con cuenta real siguen pendientes.
+- **Estado de entrega:** Cambios técnicos publicados en la rama `feat/browser-extension`; la evidencia manual de Chrome se documenta por separado y no selecciona un adaptador definitivo.
 
 ### 1.2. Delimitación Epistemológica de Contextos
 Para mantener rigor técnico y trazabilidad, este documento distingue formalmente cuatro categorías de evidencia:
@@ -28,19 +28,20 @@ Para mantener rigor técnico y trazabilidad, este documento distingue formalment
    - Límite: Muestra únicamente el comportamiento del perímetro ante clientes de consola; no refleja el comportamiento del navegador del usuario.
 3. **`unitmocks` (Pruebas unitarias sintéticas):**
    - La suite en Node.js valida contratos de esquema, ordenamiento monótono de peticiones, acotación por mínimo de expiración (`getSessionValidityDeadline`), aislamiento de errores 401/403, e invalidación por rotación de época/cuenta, incluyendo regresiones de respuestas tardías y diagnóstico sanitizado.
-4. **`liveextensionpending` (Extensión real en Chrome Manifest V3):**
+4. **`liveextensionobserved` (Extensión real en Chrome Manifest V3):**
    - La extensión empaquetada cargada como desempaquetada desde `dist/` en `chrome://extensions`.
-   - La observación disponible de UPSE registra `404` con cuerpo vacío para el GET simple; esto es evidencia de una respuesta concreta, no confirmación de funcionalidad de sesión. La prueba controlada con build reciente, pestaña nueva y cuenta real continúa pendiente.
+   - La observación previa de UPSE registró `404` cuya respuesta apareció vacía en DevTools para el GET simple. En la nueva recarga manual de Chrome con código y manifest `1.0.8`, el adaptador registró `HTTP 404`, respuesta clasificada como `HTML`, autenticación `UNKNOWN` y motivo `HTTP_404`. Son dos observaciones distintas en contextos de observación diferentes; no se infiere que el servidor haya cambiado ni que la observación anterior fuera errónea. Ninguna confirma autenticación de sesión ni acceso de clase.
 
 ### 1.2.1. Comparación observada del endpoint de sesión
 
-Se conservaron únicamente estados agregados de tres contextos observados por el usuario:
+Se conservaron únicamente estados agregados de cuatro contextos observados por el usuario:
 
 - El frontend oficial de Platzi con sesión emitió `200` y una raíz JSON con `isAuthenticated` y campos de estado.
 - Un `fetch` GET simple desde la pestaña oficial emitió `404`; el cuerpo no fue confirmado.
-- El `fetch` GET simple de UPSE emitió `404` con cuerpo vacío.
+- El `fetch` GET simple de UPSE registró `404` cuya respuesta apareció vacía en DevTools en la observación anterior.
+- La extensión UPSE recargada con código y manifest `1.0.8` registró `404` con respuesta clasificada como `HTML`, autenticación `UNKNOWN` y motivo `HTTP_404`.
 
-Esto confirma una diferencia de respuesta entre el flujo oficial y las solicitudes simples, pero no prueba que una cabecera ausente sea la causa única ni que el resultado sea exclusivo de la extensión. No se reportan URL completas con query, cabeceras, cookies, cuerpos ni IDs. Hasta observar una respuesta autoritativa de acceso a la clase premium, el estado de clase y exportación sigue siendo `UNKNOWN`.
+Esto registra respuestas distintas entre contextos y métodos de observación; no prueba un cambio del servidor, que una cabecera ausente sea la causa única ni que el resultado sea exclusivo de la extensión. No se reportan URL completas con query, cabeceras, cookies, cuerpos ni IDs. Hasta observar una respuesta autoritativa de acceso a la clase premium, el estado de clase y exportación sigue siendo `UNKNOWN`.
 
 ---
 
@@ -80,12 +81,12 @@ Se revisaron las fuentes primarias anteriores y las rutas observadas en el flujo
 
 | Capacidad | Evidencia Base | Estado Actual en UPSE | Límite Técnico |
 | :--- | :--- | :--- | :--- |
-| **A. Identidad de Sesión** | `userliveChrome`: `GET /api/v1/components/header/v2/user/` responde raíz con `isAuthenticated` y `userId`. | **Implementado** (`PlatziSessionAdapter`). Normaliza `accountId` en memoria, valida esquema estricto, protege concurrencia monótona y emite estado `verified` o `unauthenticated`. | Requiere confirmación de adjunción de cookies en entorno en vivo (`liveextensionpending`). |
+| **A. Identidad de Sesión** | `userliveChrome`: `GET /api/v1/components/header/v2/user/` responde raíz con `isAuthenticated` y `userId`; la extensión recargada emitió `404` HTML con autenticación `UNKNOWN`. | **Implementado** (`PlatziSessionAdapter`). Normaliza `accountId` en memoria, valida esquema estricto, protege concurrencia monótona y emite estado `verified` o `unauthenticated`. | La respuesta 404 de la extensión no confirma adjunción efectiva de cookies ni autenticación de sesión. |
 | **B. Metadatos Públicos de Catálogo** | SSR HTML contiene `<title>`, `canonicalUrl` y eventos analíticos con `course_id`, `class_id`. | **Implementado** (`resolvePublicClassIdentity`). Consulta con `credentials: 'omit'` y extrae identidad pública de clase sin exigir sesión activa. | No otorga permiso de reproducción ni revela URLs de video protegidas. |
 | **C. Recursos Diagnósticos (`links-files`)** | `userliveChrome`: `GET /materials/v1/{classId}/course/{courseId}/links-files/` responde 200 en Empresarial y 403 en Free para clases privadas. | **Implementado como sonda diagnóstica** (`checkResourceDiagnostics`). Registra recurso disponible o denegado sin leer cuerpo de respuesta. | **No prueba completitud semántica ni otorga reproducción (`canView`) ni exportación (`canExportSubtitles`).** |
 | **D. Acceso de Video y Exportación** | Términos de uso reservan derechos. No se identificó ni verificó contrato público ni autorización aplicable para descarga de transcripciones. | **Fail-Closed estricto** (`UNKNOWN` -> `DENY`). `checkClassAccess` y `checkExportPermission` mantienen denegación por defecto. | Bloqueado por seguridad; sin emisión de pruebas sintéticas de exportación no autorizadas. |
 | **E. Diagnóstico UI y portapapeles** | Estados sanitizados y `navigator.clipboard.writeText()` solo tras validación de la operación, con éxito/error explícitos. | **Implementado y probado** en callback unitario con promesas diferidas, con mensajes ES/EN y reduced motion heredado. | Requiere validación manual en Chrome para activación transitoria y permisos efectivos. |
-| **F. Evidencia real de Chrome** | Frontend oficial `200`; fetch simple oficial `404` con cuerpo no confirmado; UPSE `404` con cuerpo vacío. | **Pendiente** para una pestaña nueva de extensión cargada desde `dist`; el `404` actual no se considera funcionalidad confirmada. | No se puede seleccionar adaptador premium sin comparar respuestas autoritativas de la misma clase. |
+| **F. Evidencia real de Chrome** | Frontend oficial `200`; fetch simple oficial `404` con cuerpo no confirmado; observación UPSE anterior `404` cuya respuesta apareció vacía en DevTools; recarga UPSE `1.0.8` `404` clasificado como HTML, `UNKNOWN/HTTP_404`. | **Diagnóstico manual observado**: código y manifest coinciden en `1.0.8` y el reporte whitelistado pudo copiarse. Siguen pendientes las pruebas completas de interacción Chrome y la respuesta autoritativa de clase. | El `404` HTML no identifica gateway, CDN, Cloudflare, cabecera o contexto requerido; no se selecciona adaptador premium ni se amplían permisos. |
 
 ---
 
@@ -212,4 +213,4 @@ Para evaluar la extensión en Chrome:
 5. Si la extensión ya estaba cargada, pulsar el botón de recarga (ícono circular) en la tarjeta de UPSE correspondiente a la carpeta `dist`.
 
 ### 6.3. Limitación Factual de Ejecución Automatizada en Entorno Local
-Durante la revisión técnica independiente (Codex), se intentó una verificación automatizada con Playwright 1.60 y el ejecutable local en caché de Chromium 1243 ubicado en `C:\Users\Diego\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe` con un perfil temporal nuevo (`launchPersistentContext`). Dicho intento falló antes de iniciar el navegador con el error `spawn UNKNOWN` (la ruta configurada por Playwright para Chromium 1223 estaba desactualizada, y al suministrar explícitamente el binario 1243 existente también se produjo el fallo de spawn). En este intento no se reutilizó ningún perfil personal ni Edge, no se involucraron credenciales ni se obtuvo evidencia de DOM, runtime de extensión o endpoints en vivo; se trató de un intento puramente técnico. La prueba manual de sesión en Chrome permanece pendiente de ejecución humana conforme al protocolo, y el adaptador de clase definitiva continúa pendiente sin otorgar derechos de reproducción completos.
+Durante la revisión técnica independiente (Codex), se intentó una verificación automatizada con Playwright 1.60 y el ejecutable local en caché de Chromium 1243 ubicado en `C:\Users\Diego\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe` con un perfil temporal nuevo (`launchPersistentContext`). Dicho intento falló antes de iniciar el navegador con el error `spawn UNKNOWN` (la ruta configurada por Playwright para Chromium 1223 estaba desactualizada, y al suministrar explícitamente el binario 1243 existente también se produjo el fallo de spawn). En este intento no se reutilizó ningún perfil personal ni Edge, no se involucraron credenciales ni se obtuvo evidencia de DOM, runtime de extensión o endpoints en vivo; se trató de un intento puramente técnico. Después, la observación manual real en Chrome confirmó la recarga `1.0.8` y el diagnóstico `HTTP_404` clasificado como `HTML`; no confirmó clicks duplicados, spinner, a11y, cancelación, E2E completo, autenticación ni acceso a clase. El adaptador de clase definitiva continúa pendiente sin otorgar derechos de reproducción completos.
