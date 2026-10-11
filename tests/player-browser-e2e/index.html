@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UPSE player fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Fixture de reproductor local autorizado por el usuario</h1>
+      <video id="fixture-video" controls preload="metadata" width="640" height="360">
+        <track kind="subtitles" srclang="es" label="Español" src="/fixtures/original-es.vtt" default>
+        <track kind="subtitles" srclang="en" label="English" src="/fixtures/original-en.vtt">
+      </video>
+    </main>
+    <script>
+      const video = document.querySelector('#fixture-video');
+      const exposeTrackModes = () => {
+        for (const track of video.textTracks) {
+          if (track.mode === 'disabled') track.mode = 'hidden';
+        }
+      };
+      video.addEventListener('loadedmetadata', exposeTrackModes);
+      for (const track of document.querySelectorAll('track')) track.addEventListener('load', exposeTrackModes);
+      window.setTimeout(exposeTrackModes, 0);
+      window.replaceVideoWithSameUrl = () => {
+        const replacement = video.cloneNode(false);
+        replacement.id = 'fixture-video-replacement';
+        replacement.append(
+          ...Array.from(video.querySelectorAll('track')).map(track => track.cloneNode(true)),
+        );
+        video.replaceWith(replacement);
+        const exposeReplacementTrackModes = () => {
+          for (const track of replacement.textTracks) {
+            if (track.mode === 'disabled') track.mode = 'hidden';
+          }
+        };
+        replacement.addEventListener('loadedmetadata', exposeReplacementTrackModes);
+        for (const track of replacement.querySelectorAll('track')) track.addEventListener('load', exposeReplacementTrackModes);
+        window.setTimeout(exposeReplacementTrackModes, 0);
+        replacement.load();
+      };
+    </script>
+  </body>
+</html>

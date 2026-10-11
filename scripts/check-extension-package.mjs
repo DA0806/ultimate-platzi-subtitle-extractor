@@ -28,8 +28,9 @@ if (packageJson.version !== manifest.version) {
 if (manifest.manifest_version !== 3 || manifest.background?.service_worker !== 'background.js') {
   throw new Error('The release package must be a Manifest V3 extension with the expected service worker');
 }
-if (!Array.isArray(manifest.permissions) || manifest.permissions.length !== 0) {
-  throw new Error('The extension must not gain runtime permissions for the release package');
+const expectedPermissions = ['activeTab', 'scripting'];
+if (JSON.stringify([...(manifest.permissions || [])].sort()) !== JSON.stringify(expectedPermissions.sort())) {
+  throw new Error('The extension must request only activeTab and scripting for one-shot player inspection');
 }
 const expectedHosts = ['https://api.platzi.com/*', 'https://platzi.com/*', 'https://static.platzi.com/*', 'https://www.platzi.com/*'];
 if (JSON.stringify([...manifest.host_permissions].sort()) !== JSON.stringify(expectedHosts.sort())) {

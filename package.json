@@ -9,6 +9,7 @@
     "build:extension": "npm run build && node scripts/package-extension.mjs",
     "check:package": "node scripts/check-extension-package.mjs",
     "test:browser-export": "node scripts/run-browser-export-e2e.mjs",
+    "test:player-browser": "node scripts/run-player-extractor-e2e.mjs",
     "check:licenses": "node scripts/check-third-party-licenses.mjs",
     "check:release": "npm run lint && npm run check:licenses && node --test tests/*.test.js && npm run build:extension && node scripts/write-sha256.mjs dist/upse-extension.zip && npm run check:package",
     "lint": "eslint .",

@@ -10,6 +10,7 @@ import {
   bumpClassRevision,
 } from './platziAccess.js';
 import { defaultAuthorizationService } from './authorizationService.js';
+import { assertPlayerAuthorizationProof, getPlayerPageIdentity } from './playerTracks.js';
 
 const saveAs = fileSaver?.saveAs || fileSaver;
 
@@ -24,6 +25,20 @@ const normalizePageUrl = (value) => {
   }
 };
 
+const isPlayerProof = proof => proof?.provider === 'user_authorized_player';
+const normalizePlayerUrl = value => getPlayerPageIdentity(value)?.pageKey || null;
+const sendPlayerValidation = proof => new Promise((resolve, reject) => {
+  const extension = globalThis.chrome;
+  if (!extension?.runtime?.sendMessage) {
+    reject(Object.assign(new Error('La validación del reproductor requiere la extensión instalada.'), { code: 'PLAYER_EXTENSION_UNAVAILABLE' }));
+    return;
+  }
+  extension.runtime.sendMessage({ type: 'PLAYER_VALIDATE', proof }, response => {
+    if (extension.runtime.lastError) reject(Object.assign(new Error(extension.runtime.lastError.message), { code: 'PLAYER_MESSAGE_FAILED' }));
+    else resolve(response);
+  });
+});
+
 export const createExportContext = (videos = []) => {
   const authState = useAuthStore.getState();
   const storeVideos = useSubtitleStore.getState().videos;
@@ -36,7 +51,9 @@ export const createExportContext = (videos = []) => {
   });
 };
 
-export const assertExportPreflight = (context) => {
+export const assertExportPreflight = (context, videos = []) => {
+  const requiresPlatziSession = videos.length === 0 || videos.some(video => !isPlayerProof(video?.authorizationProof));
+  if (!requiresPlatziSession) return;
   const currentStatus = useAuthStore?.getState?.()?.sessionStatus;
   const currentEpoch = useAuthStore?.getState?.()?.sessionEpoch ?? 0;
   if (currentStatus !== 'authenticated') {
@@ -60,7 +77,10 @@ const assertVideoStoreMembership = (video) => {
     error.code = 'STORE_CONTENT_PURGED';
     throw error;
   }
-  const videoUrl = normalizePageUrl(video.url || video.canonicalUrl);
+  const playerVideo = isPlayerProof(video.authorizationProof);
+  const videoUrl = playerVideo
+    ? normalizePlayerUrl(video.url || video.canonicalUrl)
+    : normalizePageUrl(video.url || video.canonicalUrl);
   if (!videoUrl) {
     const error = new Error('La identidad canónica del video no está disponible en el almacén.');
     error.code = 'STORE_CONTENT_STALE';
@@ -68,7 +88,7 @@ const assertVideoStoreMembership = (video) => {
   }
   const currentVideo = storeVideos.find(candidate => (
     candidate.id === video.id &&
-    normalizePageUrl(candidate.url || candidate.canonicalUrl) === videoUrl
+    (playerVideo ? normalizePlayerUrl(candidate.url || candidate.canonicalUrl) : normalizePageUrl(candidate.url || candidate.canonicalUrl)) === videoUrl
   ));
   if (!currentVideo) {
     const error = new Error('El video a exportar no pertenece al curso cargado en el almacén.');
@@ -103,13 +123,22 @@ const assertVideoMatchesProof = (video, proof) => {
   }
   const videoUrl = video.url || video.canonicalUrl;
   if (videoUrl) {
-    const normVideoUrl = normalizePageUrl(videoUrl);
-    const normProofUrl = normalizePageUrl(proof.canonicalUrl || proof.pageUrl);
+    const playerVideo = isPlayerProof(proof);
+    const normVideoUrl = playerVideo ? normalizePlayerUrl(videoUrl) : normalizePageUrl(videoUrl);
+    const normProofUrl = playerVideo ? proof.pageKey : normalizePageUrl(proof.canonicalUrl || proof.pageUrl);
     if (!normVideoUrl || !normProofUrl || normVideoUrl !== normProofUrl) {
       const error = new Error('La URL canónica del video no coincide con la prueba de autorización.');
       error.code = 'AUTHORIZATION_BINDING_MISMATCH';
       throw error;
     }
+  }
+  if (isPlayerProof(proof)) {
+    if (video.provenance !== 'user_authorized_player') {
+      const error = new Error('El contenido del reproductor no tiene una procedencia válida.');
+      error.code = 'AUTHORIZATION_BINDING_MISMATCH';
+      throw error;
+    }
+    return;
   }
   if (video.slug && proof.classSlug && video.slug !== proof.classSlug) {
     const error = new Error('El slug de clase no coincide con la prueba.');
@@ -124,7 +153,7 @@ const assertVideoMatchesProof = (video, proof) => {
 };
 
 const revalidateExportPreflight = async (videos = [], context) => {
-  assertExportPreflight(context);
+  assertExportPreflight(context, videos);
 
   for (const video of videos) {
     const proof = video?.authorizationProof;
@@ -136,6 +165,24 @@ const revalidateExportPreflight = async (videos = [], context) => {
 
     assertVideoMatchesProof(video, proof);
     assertVideoStoreMembership(video);
+
+    if (isPlayerProof(proof)) {
+      assertPlayerAuthorizationProof(proof, {
+        pageUrl: proof.pageKey,
+        tabId: proof.tabId,
+        documentId: proof.documentId,
+        playerId: proof.playerId,
+        trackId: proof.trackId,
+        authorizationNonce: proof.authorizationNonce,
+      });
+      const validation = await sendPlayerValidation(proof);
+      if (!validation?.ok) {
+        const error = new Error(validation?.error?.message || 'La página o la pista cambiaron; vuelve a detectar la pista.');
+        error.code = validation?.error?.code || 'PLAYER_STALE_CONTEXT';
+        throw error;
+      }
+      continue;
+    }
 
     if (isProofRevoked(proof.proofId)) {
       const error = new Error('La prueba de autorización de esta clase fue revocada.');
@@ -159,7 +206,7 @@ const revalidateExportPreflight = async (videos = [], context) => {
       expectedAccount: proof.sessionAccount,
     });
 
-    assertExportPreflight(context);
+    assertExportPreflight(context, videos);
 
     const now = Date.now();
     if (proof.expiresAt && now >= proof.expiresAt) {
@@ -196,22 +243,63 @@ const revalidateExportPreflight = async (videos = [], context) => {
   }
 };
 
-const assertFinalExportPreflight = (videos, context) => {
-  assertExportPreflight(context);
+const assertFinalExportPreflight = async (videos, context) => {
+  assertExportPreflight(context, videos);
   for (const video of videos) {
     const proof = video?.authorizationProof;
     assertVideoMatchesProof(video, proof);
     assertVideoStoreMembership(video);
+    if (isPlayerProof(proof)) {
+      assertPlayerAuthorizationProof(proof, {
+        pageUrl: proof.pageKey,
+        tabId: proof.tabId,
+        documentId: proof.documentId,
+        playerId: proof.playerId,
+        trackId: proof.trackId,
+        authorizationNonce: proof.authorizationNonce,
+      });
+      const validation = await sendPlayerValidation(proof);
+      if (!validation?.ok) {
+        const error = new Error(validation?.error?.message || 'La página o la pista cambiaron; vuelve a detectar la pista.');
+        error.code = validation?.error?.code || 'PLAYER_STALE_CONTEXT';
+        throw error;
+      }
+      continue;
+    }
     assertAuthorizedExportProof(proof, proof.authorizedVttUrls?.[0] || null, {
       currentSessionEpoch: context.initialEpoch,
     });
   }
 };
 
+// Keep this synchronous guard immediately adjacent to every external export side effect.
+const assertFinalExportSinkPreflight = (videos, context) => {
+  assertExportPreflight(context, videos);
+  for (const video of videos) {
+    const proof = video?.authorizationProof;
+    assertVideoMatchesProof(video, proof);
+    assertVideoStoreMembership(video);
+    if (isPlayerProof(proof)) {
+      assertPlayerAuthorizationProof(proof, {
+        pageUrl: proof.pageKey,
+        tabId: proof.tabId,
+        documentId: proof.documentId,
+        playerId: proof.playerId,
+        trackId: proof.trackId,
+        authorizationNonce: proof.authorizationNonce,
+      });
+    } else {
+      assertAuthorizedExportProof(proof, proof.authorizedVttUrls?.[0] || null, {
+        currentSessionEpoch: context.initialEpoch,
+      });
+    }
+  }
+};
+
 export const copyMergedTxt = async (videos, targetLang) => {
   const context = createExportContext(videos);
   await revalidateExportPreflight(videos, context);
-  assertExportPreflight(context);
+  assertExportPreflight(context, videos);
 
   for (const video of videos) {
     if (isProofRevoked(video?.authorizationProof?.proofId)) {
@@ -231,7 +319,8 @@ export const copyMergedTxt = async (videos, targetLang) => {
     throw error;
   }
 
-  assertFinalExportPreflight(videos, context);
+  await assertFinalExportPreflight(videos, context);
+  assertFinalExportSinkPreflight(videos, context);
 
   await navigator.clipboard.writeText(mergedText);
 };
@@ -239,9 +328,9 @@ export const copyMergedTxt = async (videos, targetLang) => {
 export const downloadVideoTxt = async (video, targetLang, courseSlug, index) => {
   const context = createExportContext([video]);
   await revalidateExportPreflight([video], context);
-  assertExportPreflight(context);
+  assertExportPreflight(context, [video]);
 
-  assertFinalExportPreflight([video], context);
+  await assertFinalExportPreflight([video], context);
 
   if (!video?.extractedContent) return;
 
@@ -251,7 +340,8 @@ export const downloadVideoTxt = async (video, targetLang, courseSlug, index) => 
 
   if (!content) return;
 
-  assertFinalExportPreflight([video], context);
+  await assertFinalExportPreflight([video], context);
+  assertFinalExportSinkPreflight([video], context);
 
   const numStr = String((index ?? 0) + 1).padStart(2, '0');
   const safeCourse = courseSlug || 'subtitulos';
@@ -264,7 +354,7 @@ export const downloadVideoTxt = async (video, targetLang, courseSlug, index) => 
 export const downloadMergedTxt = async (videos, targetLang, courseSlug) => {
   const context = createExportContext(videos);
   await revalidateExportPreflight(videos, context);
-  assertExportPreflight(context);
+  assertExportPreflight(context, videos);
 
   for (const video of videos) {
     if (isProofRevoked(video?.authorizationProof?.proofId)) {
@@ -278,7 +368,8 @@ export const downloadMergedTxt = async (videos, targetLang, courseSlug) => {
   const mergedText = mergeSubtitles(videos, targetLang);
   if (!mergedText) return;
 
-  assertFinalExportPreflight(videos, context);
+  await assertFinalExportPreflight(videos, context);
+  assertFinalExportSinkPreflight(videos, context);
 
   const blob = new Blob([mergedText], { type: 'text/plain;charset=utf-8' });
   saveAs(blob, `${courseSlug || 'subtitulos'}-${targetLang}.txt`);
@@ -287,7 +378,7 @@ export const downloadMergedTxt = async (videos, targetLang, courseSlug) => {
 export const downloadZip = async (videos, targetLang, courseSlug) => {
   const context = createExportContext(videos);
   await revalidateExportPreflight(videos, context);
-  assertExportPreflight(context);
+  assertExportPreflight(context, videos);
 
   const zip = new JSZip();
   const isAllLangs = targetLang === 'all';
@@ -325,9 +416,10 @@ export const downloadZip = async (videos, targetLang, courseSlug) => {
   const content = await zip.generateAsync({ type: 'blob' });
 
   await revalidateExportPreflight(videos, context);
-  assertExportPreflight(context);
+  assertExportPreflight(context, videos);
 
-  assertFinalExportPreflight(videos, context);
+  await assertFinalExportPreflight(videos, context);
+  assertFinalExportSinkPreflight(videos, context);
 
   saveAs(content, `${courseSlug || 'subtitulos'}.zip`);
 };

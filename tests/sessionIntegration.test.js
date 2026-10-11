@@ -997,7 +997,7 @@ test('built extension zip: contains valid Manifest V3, no cookies/eval/content_s
 
   const manifestContent = JSON.parse(await manifestFile.async('string'));
   assert.equal(manifestContent.manifest_version, 3);
-  assert.deepEqual(manifestContent.permissions, [], 'permissions must be strictly empty array');
+  assert.deepEqual(manifestContent.permissions, ['activeTab', 'scripting'], 'permissions must be limited to one-shot player inspection');
   assert.deepEqual(manifestContent.host_permissions, [
     'https://platzi.com/*',
     'https://www.platzi.com/*',

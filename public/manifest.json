@@ -10,7 +10,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": [],
+  "permissions": ["activeTab", "scripting"],
   "host_permissions": [
     "https://platzi.com/*",
     "https://www.platzi.com/*",

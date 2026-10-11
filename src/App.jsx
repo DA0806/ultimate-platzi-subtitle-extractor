@@ -11,6 +11,7 @@ import { ProgressBar } from './components/ProgressBar';
 import { ExportPanel } from './components/ExportPanel';
 import { SetupWizard } from './components/SetupWizard';
 import { CourseWorkspaceSkeleton } from './components/CourseWorkspaceSkeleton';
+import { PlayerSourcePanel } from './components/PlayerSourcePanel';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { useI18n } from './i18n';
@@ -157,6 +158,7 @@ function App() {
             </div>
 
             <div className="mt-6">
+              <PlayerSourcePanel />
               <UrlInput onLoadingChange={setIsCourseLoading} />
             </div>
 

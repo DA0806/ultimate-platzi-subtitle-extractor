@@ -18,7 +18,7 @@ test('package check rejects a distribution containing test-only authorization ma
     name: 'fixture',
     version: '1.0.10',
     background: { service_worker: 'background.js' },
-    permissions: [],
+    permissions: ['activeTab', 'scripting'],
     host_permissions: ['https://api.platzi.com/*', 'https://platzi.com/*', 'https://static.platzi.com/*', 'https://www.platzi.com/*'],
   };
   await fs.writeFile(path.join(fixtureDir, 'manifest.json'), JSON.stringify(manifest));
@@ -57,7 +57,7 @@ test('package check rejects a distribution symlink that escapes dist', async t =
     name: 'fixture',
     version: '1.0.10',
     background: { service_worker: 'background.js' },
-    permissions: [],
+    permissions: ['activeTab', 'scripting'],
     host_permissions: ['https://api.platzi.com/*', 'https://platzi.com/*', 'https://static.platzi.com/*', 'https://www.platzi.com/*'],
   };
   await fs.writeFile(path.join(fixtureDir, 'manifest.json'), JSON.stringify(manifest));
@@ -86,7 +86,7 @@ test('package check rejects a ZIP whose recorded checksum is stale', async () =>
     name: 'fixture',
     version: '1.0.10',
     background: { service_worker: 'background.js' },
-    permissions: [],
+    permissions: ['activeTab', 'scripting'],
     host_permissions: ['https://api.platzi.com/*', 'https://platzi.com/*', 'https://static.platzi.com/*', 'https://www.platzi.com/*'],
   };
   await fs.writeFile(path.join(fixtureDir, 'manifest.json'), JSON.stringify(manifest));
