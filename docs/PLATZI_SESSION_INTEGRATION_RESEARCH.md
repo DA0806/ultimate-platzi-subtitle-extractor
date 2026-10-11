@@ -214,3 +214,67 @@ Para evaluar la extensión en Chrome:
 
 ### 6.3. Limitación Factual de Ejecución Automatizada en Entorno Local
 Durante la revisión técnica independiente (Codex), se intentó una verificación automatizada con Playwright 1.60 y el ejecutable local en caché de Chromium 1243 ubicado en `C:\Users\Diego\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe` con un perfil temporal nuevo (`launchPersistentContext`). Dicho intento falló antes de iniciar el navegador con el error `spawn UNKNOWN` (la ruta configurada por Playwright para Chromium 1223 estaba desactualizada, y al suministrar explícitamente el binario 1243 existente también se produjo el fallo de spawn). En este intento no se reutilizó ningún perfil personal ni Edge, no se involucraron credenciales ni se obtuvo evidencia de DOM, runtime de extensión o endpoints en vivo; se trató de un intento puramente técnico. Después, la observación manual real en Chrome confirmó la recarga `1.0.8` y el diagnóstico `HTTP_404` clasificado como `HTML`; no confirmó clicks duplicados, spinner, a11y, cancelación, E2E completo, autenticación ni acceso a clase. El adaptador de clase definitiva continúa pendiente sin otorgar derechos de reproducción completos.
+
+## Diagnóstico E2E mediante Chrome DevTools MCP conectado a Microsoft Edge
+
+- **Fecha y zona horaria:** 10 de octubre de 2026, America/Guatemala.
+- **Alcance:** evidencia nueva obtenida mediante Chrome DevTools MCP conectado al perfil existente de Microsoft Edge. Se distingue de las observaciones humanas históricas en Chrome y de las pruebas unitarias.
+- **Herramientas MCP utilizadas:** `list_pages`, `take_snapshot`, `list_network_requests`, `evaluate_script`, `navigate_page` y `click`. La evaluación segura del agente de usuario confirmó Microsoft Edge basado en Chromium (`Edg`). La operación equivalente a `get_network_request` se omitió deliberadamente porque no ofrecía un selector seguro y podía exponer cuerpos o cabeceras con secretos.
+
+### Evidencia nueva del navegador
+
+La lista de páginas permitió inspeccionar una pestaña de Platzi y `edge://extensions`. La interfaz oficial de Platzi mostró una sesión activa; se omitieron nombre, correo y cualquier otro dato personal. Tras una segunda búsqueda, `edge://extensions` mostró UPSE habilitada, con `index.html` y versión `1.0.8`. Esto confirma la instalación y versión visible, pero no demuestra que la extensión pueda inspeccionar o reutilizar la sesión del sitio.
+
+La navegación real a la clase de referencia y una recarga normal observaron dos veces `GET /materials/v1/71787/course/11059/links-files/` con HTTP `200`. La solicitud fue observada como una consulta de recursos de la clase; no se leyó ni almacenó su cuerpo y el resultado no se interpreta como autenticación, reproducción ni permiso de exportación. En la ventana limitada de hasta 300 solicitudes de tipo `document`, `xhr` y `fetch`, la solicitud oficial nueva `GET /api/v1/components/header/v2/user/` no apareció durante esa navegación y recarga. Esto significa «no observada», no inexistencia ni respuesta distinta. MIME, `Origin`, cookies, cabeceras, redirecciones y cuerpos no fueron inspeccionados en esa ventana.
+
+La interacción con la vista de UPSE quedó bloqueada por la capacidad habilitada del MCP: al intentar abrir una URL `chrome-extension:` se devolvió exactamente `Navigating to chrome-extension: URLs is not allowed without --categoryExtensions`. La categoría de extensiones no estaba habilitada. Por ello no se pudo pulsar **Volver a verificar**, observar el spinner o el reintento, capturar la consola interna, confirmar una nueva solicitud `header/v2/user`, ni validar el resultado `UNKNOWN` desde la interfaz. La versión visible en `edge://extensions` no demuestra identidad del bundle ni equivalencia de hash. La consola accesible de `edge://extensions` no sustituye a la consola de la página de UPSE.
+
+La documentación oficial de Chrome DevTools MCP indica que la categoría de extensiones requiere `--categoryExtensions=true` y una conexión mediante pipe. En la configuración actual, `autoConnect`, `browserUrl` y `wsEndpoint` son incompatibles con habilitar esa categoría; por tanto, el flag por sí solo no resuelve el acceso. No se cambió la configuración global, no se cerró Edge, no se reinstaló la extensión ni se inició un perfil alternativo. La recuperación futura debe preservar el perfil real y verificar primero que la nueva conexión conserva la sesión; un perfil nuevo no equivale a la sesión autenticada observada.
+
+### Matriz A/B/C sanitizada
+
+| Contexto | Solicitud o endpoint | HTTP | Tipo de respuesta | Interpretación y confianza |
+| :--- | :--- | :---: | :--- | :--- |
+| A. Frontend oficial de Platzi en Edge | `/materials/v1/71787/course/11059/links-files/` | `200` (2 observaciones) | No clasificado; cuerpo no leído | La página realizó una consulta de recursos de la clase. No prueba sesión ni exportación. **Alta** para el estado HTTP observado. |
+| A. Frontend oficial de Platzi en Edge | `/api/v1/components/header/v2/user/` | No observado en esta navegación | No disponible | No hay evidencia nueva de `200` ni de `404` en el flujo observado. **Alta** para «no observado»; no permite inferir inexistencia. |
+| B. GET simple desde la página oficial | `/api/v1/components/header/v2/user/` | `404` histórico | Cuerpo no confirmado | Evidencia humana anterior; la diferencia causal sigue abierta. **Media**. |
+| C. UPSE MV3 1.0.8 | `/api/v1/components/header/v2/user/` | `404` histórico | `HTML`, `UNKNOWN/HTTP_404` | Evidencia humana anterior de una recarga 1.0.8; no se repitió desde el runtime de extensión de Edge por el bloqueo de categoría. **Media**. |
+
+### H1–H6 después de la inspección E2E
+
+| Hipótesis | Evidencia a favor | Evidencia en contra o faltante | Estado y experimento mínimo seguro |
+| :--- | :--- | :--- | :--- |
+| H1. Credencial específica de API del frontend | La respuesta oficial histórica fue `200` y el frontend puede enviar contexto adicional. | El MCP nuevo no observó el endpoint ni permite inspeccionar valores; no se copiarán credenciales. | **No determinada.** Comparar únicamente nombres/presencia agregada de cabeceras en un flujo oficial visible. |
+| H2. Origin y contexto del navegador | La página, API y extensión son contextos distintos; el GET simple web también fue `404`. | No hay comparación nueva de esos contextos. | **No determinada.** Comparar una petición normal sin fabricar cabeceras. |
+| H3. Gateway, CDN o protección de perímetro | El GET simple histórico devolvió `404`; UPSE histórica recibió HTML. | No se observó cadena de redirección, servidor ni cuerpo seguro que identifique la capa. | **No determinada.** Inspeccionar metadatos sanitizados de una petición normal, sin replay ni evasión. |
+| H4. Cookies insuficientes o no adjuntas | La extensión no obtuvo una respuesta válida histórica. | No se extrajeron cookies ni se verificó su política efectiva. | **No determinada.** Consultar solo presencia agregada en una petición normal, nunca valores. |
+| H5. Endpoint interno no diseñado para terceros | La ruta es interna y no se identificó contrato OAuth/API de consumidor. | Falta documentación o interfaz aprobada que otorgue identidad, clase o exportación. | **No determinada.** Consultar únicamente fuentes oficiales o una interfaz autorizada. |
+| H6. Defecto propio de UPSE | No hay evidencia nueva de defecto; el cliente usa `credentials: include`, `redirect: error`, `cache: no-store` y validación estricta. | El runtime de extensión no pudo probarse en Edge; las pruebas locales no sustituyen E2E. | **No determinada.** Repetir el recheck con runtime inspeccionable. |
+
+### Opciones de integración evaluadas
+
+No se implementó ninguna integración nueva porque no apareció un mecanismo autorizado. El endpoint interno de cabecera mantiene compatibilidad potencial con MV3 y Edge, pero su respuesta no es estable para UPSE y depende de un contrato no documentado. Un OAuth/PKCE de consumidor no fue identificado en las fuentes públicas consultadas; no se afirma que no exista globalmente. Las Business API documentadas usan claves de empresa y SSO empresarial, no un flujo de identidad/exportación para este cliente. Las señales de sesión visibles en navegador o UI son indicios y no autoridad de clase ni exportación. Fuentes primarias consultadas: [`Platzi Docs`](https://platzi.com/docs/), [`Platzi API key`](https://platzi.com/docs/apikey/) y [`Términos de Platzi`](https://platzi.com/terminos/); se citan como documentación técnica y de producto, no como asesoramiento legal. La interfaz oficial del sitio sigue siendo la vía que debe solicitarse a Platzi si se requiere una señal de identidad, acceso de clase o exportación autorizada.
+
+Las alternativas de copiar tokens, imitar cabeceras internas, leer cookies o almacenamiento, interceptar/reproducir solicitudes y usar URLs multimedia quedan descartadas por seguridad, mantenimiento y límites de autorización. No se ampliaron permisos MV3. La opción vigente conserva `UNKNOWN` y denegación por defecto para clase y exportación hasta disponer de una respuesta autoritativa y un contrato permitido.
+
+| Opción D | MV3/Edge | API privada y mantenimiento | Permisos y seguridad | Identidad / clase / exportación |
+| :--- | :--- | :--- | :--- | :--- |
+| OAuth/PKCE de consumidor documentado | Compatible si Platzi lo ofrece | No identificado en documentación pública; menor dependencia privada si existiera | Sin secretos reutilizados; requiere contrato explícito | No disponible: faltan contrato e implementación autorizada. |
+| Sesión existente mediante página/UI/DOM | Técnicamente accesible solo en contextos permitidos por Edge | Frágil ante cambios de UI; no es API estable | No requiere leer cookies, pero las señales son no autoritativas | Puede indicar contexto; no prueba identidad de servidor, clase ni exportación. |
+| Endpoint interno `header/v2/user` | La solicitud MV3 ya es compatible en código | API privada; contrato y mantenimiento inciertos | No se amplían permisos; no se imitan cabeceras | Históricamente `404` en GET simple/UPSE; no resuelve clase/exportación. |
+| Business API / SSO empresarial | No es un flujo consumer de UPSE | Documentado para organizaciones, no para este cliente | Requiere autorización y credenciales empresariales propias | No concede por sí solo identidad, clase ni exportación de la cuenta actual. |
+
+### Estado E2E y validación
+
+| Caso | Estado | Evidencia |
+| :--- | :--- | :--- |
+| Conexión MCP a Edge y confirmación de navegador | **PASS** | `list_pages` y `evaluate_script`; agente de usuario Edge Chromium. |
+| Sesión oficial visible | **PASS** | Interfaz de Platzi mostró sesión activa; sin PII almacenada. |
+| Recursos de clase observados | **PASS** | `links-files` HTTP 200 en dos observaciones. |
+| UPSE instalada y versión visible | **PASS** | `edge://extensions` mostró UPSE habilitada, `index.html`, versión 1.0.8; igualdad de hash del bundle **NOT TESTED/BLOCKED**. |
+| Abrir e inspeccionar runtime UPSE | **BLOCKED** | Requiere pipe y categoría de extensiones; `--categoryExtensions=true` no basta con `autoConnect`, `browserUrl` o `wsEndpoint`. |
+| Recheck, spinner, retry, consola UPSE y nueva solicitud 404 | **BLOCKED** | Requieren la categoría de extensiones; no se deben inferir. |
+| Autenticación desde UPSE, acceso por clase y permiso de exportación | **BLOCKED** | No hubo contexto de runtime ni respuesta autoritativa de exportación. |
+| Tests unitarios, lint y build | **PASS** | `node --test tests/*.test.js`: 111/111 sobre fixtures/mocks/local; lint y build exit 0. Son validaciones locales y no sustituyen E2E de Edge; manifest visible coincide en 1.0.8. |
+
+La investigación no confirma una causa única del HTTP 404. La evidencia nueva confirma conectividad real con Edge, una sesión visible en Platzi, una consulta de recursos HTTP 200 y la instalación de UPSE, pero deja pendiente la inspección del runtime `chrome-extension:`. No se modificaron autenticación, versión, permisos ni código de producto.
