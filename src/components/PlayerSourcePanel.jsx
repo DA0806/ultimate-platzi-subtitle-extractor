@@ -6,7 +6,7 @@ import { Button } from './ui/Button';
 const playerSlug = track => `player-${String(track.trackId || 'track').replace(/[^a-z0-9_-]/gi, '-')}`;
 
 export const PlayerSourcePanel = () => {
-  const { status, tracks, page, documentId, authorizationNonce, error, detectPlayer, extractTrack } = usePlayerExtractor();
+  const { status, tracks, page, documentId, playerRevision, authorizationNonce, error, detectPlayer, extractTrack } = usePlayerExtractor();
   const setVideos = useSubtitleStore(state => state.setVideos);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [rightsContextKey, setRightsContextKey] = useState(null);
@@ -14,7 +14,7 @@ export const PlayerSourcePanel = () => {
   const [selectedContextKey, setSelectedContextKey] = useState(null);
   const [actionError, setActionError] = useState(null);
   const isPlatziPage = Boolean(page?.origin && /(^|\.)platzi\.com$/i.test(new URL(page.origin).hostname));
-  const contextKey = `${page?.pageKey || ''}:${documentId || ''}:${authorizationNonce || ''}`;
+  const contextKey = `${page?.pageKey || ''}:${documentId || ''}:${playerRevision || ''}:${authorizationNonce || ''}`;
   const rightsConfirmedForContext = rightsConfirmed && rightsContextKey === contextKey && !isPlatziPage;
 
   const handleDetect = async () => {

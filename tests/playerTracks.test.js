@@ -6,6 +6,7 @@ import {
   probePlayerTracks,
   readPlayerTrack,
 } from '../src/utils/playerTracks.js';
+import { probePlayerInPage } from '../src/utils/playerInjection.js';
 import { useSubtitleStore } from '../src/store/subtitleStore.js';
 import { copyMergedTxt } from '../src/utils/downloader.js';
 import { isTrustedPlayerMessageSender } from '../src/utils/playerMessageAuth.js';
@@ -60,6 +61,41 @@ test('probePlayerTracks reports metadata without touching cue text', () => {
   ]);
   assert.equal(result.tracks[0].text, undefined);
   assert.equal(result.page.pathname, '/lesson/one');
+});
+
+test('in-page player revision changes when src or query changes even if currentSrc remains stable', async () => {
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  const previousRevision = globalThis.__upse_player_revision_v1__;
+  const trackElement = {
+    src: 'https://example.test/captions-es.vtt',
+    getAttribute(name) { return name === 'src' ? '/captions-es.vtt' : null; },
+  };
+  const track = { kind: 'subtitles', language: 'es', label: 'EspaÃ±ol', mode: 'showing' };
+  const video = {
+    currentSrc: 'https://example.test/media-a.mp4',
+    src: 'https://example.test/media-a.mp4',
+    textTracks: [track],
+    querySelectorAll() { return [trackElement]; },
+  };
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'https://example.test/lesson' } });
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelectorAll() { return [video]; } } });
+  try {
+    const first = await probePlayerInPage();
+    video.src = 'https://example.test/media-b.mp4';
+    const second = await probePlayerInPage();
+    assert.notEqual(first.playerRevision, second.playerRevision);
+    Object.assign(globalThis.location, { href: 'https://example.test/lesson?revision=2' });
+    const third = await probePlayerInPage();
+    assert.notEqual(second.playerRevision, third.playerRevision);
+  } finally {
+    if (previousRevision === undefined) delete globalThis.__upse_player_revision_v1__;
+    else globalThis.__upse_player_revision_v1__ = previousRevision;
+    if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument);
+    else delete globalThis.document;
+    if (originalLocation) Object.defineProperty(globalThis, 'location', originalLocation);
+    else delete globalThis.location;
+  }
 });
 
 test('player worker accepts only messages from the extension workspace', () => {
@@ -171,6 +207,23 @@ test('player authorization rejects Platzi, unconfirmed rights, and mismatched sc
     () => assertPlayerAuthorizationProof(proof, context, proof.expiresAt),
     error => error.code === 'PLAYER_AUTHORIZATION_EXPIRED',
   );
+});
+
+test('player authorization binds the proof to the opaque current-player revision', () => {
+  const revisionContext = { ...context, playerRevision: 'revision-a' };
+  const proof = createPlayerAuthorizationProof({ ...revisionContext, rightsConfirmed: true, now: 1_000 });
+
+  assert.doesNotThrow(() => assertPlayerAuthorizationProof(proof, revisionContext, 2_000));
+  assert.throws(
+    () => assertPlayerAuthorizationProof(proof, { ...revisionContext, playerRevision: 'revision-b' }, 2_000),
+    error => error.code === 'PLAYER_AUTHORIZATION_SCOPE_MISMATCH',
+  );
+  assert.throws(
+    () => assertPlayerAuthorizationProof(proof, { ...revisionContext, pageUrl: `${pageUrl}&changed=1`, playerRevision: 'query-revision-b' }, 2_000),
+    error => error.code === 'PLAYER_AUTHORIZATION_SCOPE_MISMATCH',
+  );
+  assert.equal(proof.playerRevision, 'revision-a');
+  assert.equal(Object.prototype.hasOwnProperty.call(proof, 'mediaSrc'), false);
 });
 
 test('readPlayerTrack rejects malformed cue timing before returning content', () => {

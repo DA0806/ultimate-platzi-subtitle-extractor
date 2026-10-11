@@ -1,5 +1,5 @@
 // Passed to chrome.scripting.executeScript as a one-shot isolated-world function.
-export const probePlayerInPage = () => {
+export const probePlayerInPage = async () => {
   try {
     const pageIdentityInPage = () => {
       const url = new URL(location.href);
@@ -24,6 +24,31 @@ export const probePlayerInPage = () => {
       }
       return result;
     };
+    const createOpaqueDigest = async value => {
+      const input = String(value);
+      if (!globalThis.crypto?.subtle || !globalThis.TextEncoder) throw new Error('PLAYER_REVISION_UNAVAILABLE');
+      const bytes = await globalThis.crypto.subtle.digest('SHA-256', new globalThis.TextEncoder().encode(input));
+      return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
+    };
+    const getSourceSnapshotInPage = (videos, tracks) => [location.href, ...videos.flatMap(video => [
+        video.currentSrc || '',
+        video.src || '',
+        ...Array.from(video.querySelectorAll?.('track') || []).flatMap(track => [track.src || '', track.getAttribute('src') || '']),
+      ]), ...tracks.map(track => `${track.playerId}\u0000${track.trackId}`)].join('\u0000');
+    const getPlayerRevisionInPage = async (videos, tracks) => {
+      // Hash transient page/media identifiers; only the digest and opaque revision survive.
+      const sourceSnapshot = getSourceSnapshotInPage(videos, tracks);
+      const digest = await createOpaqueDigest(sourceSnapshot);
+      if (sourceSnapshot !== getSourceSnapshotInPage(videos, tracks)) throw new Error('PLAYER_REVISION_CHANGED');
+      const previous = globalThis['__upse_player_revision_v1__'];
+      if (!previous || previous.digest !== digest) {
+        globalThis['__upse_player_revision_v1__'] = {
+          digest,
+          revision: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+        };
+      }
+      return globalThis['__upse_player_revision_v1__'].revision;
+    };
     const page = pageIdentityInPage();
     const documentId = getDocumentTokenInPage();
     const videos = Array.from(document.querySelectorAll('video'));
@@ -39,11 +64,13 @@ export const probePlayerInPage = () => {
         enabled: track.mode !== 'disabled',
       }));
     });
+    const playerRevision = await getPlayerRevisionInPage(videos, tracks);
     return {
       status: videos.length === 0 ? 'no-video' : tracks.length === 0 ? 'no-tracks' : 'available',
       reason: videos.length === 0 ? 'PLAYER_NO_VIDEO' : tracks.length === 0 ? 'PLAYER_NO_TRACKS' : null,
       page,
       documentId,
+      playerRevision,
       tracks,
     };
   } catch {
@@ -52,7 +79,7 @@ export const probePlayerInPage = () => {
 };
 
 // This function is only invoked after the extension validates the ephemeral proof.
-export const readPlayerInPage = ({ playerId, trackId, pageKey, documentId } = {}) => {
+export const readPlayerInPage = async ({ playerId, trackId, pageKey, documentId, playerRevision: expectedPlayerRevision } = {}) => {
   try {
     const pageIdentityInPage = () => {
       const url = new URL(location.href);
@@ -63,6 +90,11 @@ export const readPlayerInPage = ({ playerId, trackId, pageKey, documentId } = {}
       if (!globalThis['__upse_document_identity_v1__']) globalThis['__upse_document_identity_v1__'] = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
       return globalThis['__upse_document_identity_v1__'];
     };
+    const getIdentityInPage = (value, symbolName) => {
+      const symbol = Symbol.for(symbolName);
+      if (!value[symbol]) value[symbol] = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      return value[symbol];
+    };
     const itemsInPage = value => {
       if (!value || typeof value.length !== 'number') return [];
       const result = [];
@@ -71,6 +103,31 @@ export const readPlayerInPage = ({ playerId, trackId, pageKey, documentId } = {}
         if (item) result.push(item);
       }
       return result;
+    };
+    const createOpaqueDigest = async value => {
+      const input = String(value);
+      if (!globalThis.crypto?.subtle || !globalThis.TextEncoder) throw new Error('PLAYER_REVISION_UNAVAILABLE');
+      const bytes = await globalThis.crypto.subtle.digest('SHA-256', new globalThis.TextEncoder().encode(input));
+      return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
+    };
+    const getSourceSnapshotInPage = (videos, tracks) => [location.href, ...videos.flatMap(video => [
+        video.currentSrc || '',
+        video.src || '',
+        ...Array.from(video.querySelectorAll?.('track') || []).flatMap(track => [track.src || '', track.getAttribute('src') || '']),
+      ]), ...tracks.map(track => `${track.playerId}\u0000${track.trackId}`)].join('\u0000');
+    const getPlayerRevisionInPage = async (videos, tracks) => {
+      // Hash transient page/media identifiers; only the digest and opaque revision survive.
+      const sourceSnapshot = getSourceSnapshotInPage(videos, tracks);
+      const digest = await createOpaqueDigest(sourceSnapshot);
+      if (sourceSnapshot !== getSourceSnapshotInPage(videos, tracks)) throw new Error('PLAYER_REVISION_CHANGED');
+      const previous = globalThis['__upse_player_revision_v1__'];
+      if (!previous || previous.digest !== digest) {
+        globalThis['__upse_player_revision_v1__'] = {
+          digest,
+          revision: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+        };
+      }
+      return globalThis['__upse_player_revision_v1__'].revision;
     };
     const page = pageIdentityInPage();
     const host = new URL(location.href).hostname.toLowerCase();
@@ -91,7 +148,17 @@ export const readPlayerInPage = ({ playerId, trackId, pageKey, documentId } = {}
     const trackSymbol = Symbol.for('upse.track.identity.v1');
     const playerSymbol = Symbol.for('upse.player.identity.v1');
     const video = Array.from(document.querySelectorAll('video')).find(item => item[playerSymbol] === playerId);
+    const allVideos = Array.from(document.querySelectorAll('video'));
+    const allTracks = allVideos.flatMap(item => {
+      const currentPlayerId = item[playerSymbol] || getIdentityInPage(item, 'upse.player.identity.v1');
+      return itemsInPage(item.textTracks).map(itemTrack => ({
+        playerId: currentPlayerId,
+        trackId: itemTrack[trackSymbol] || getIdentityInPage(itemTrack, 'upse.track.identity.v1'),
+      }));
+    });
+    const playerRevision = await getPlayerRevisionInPage(allVideos, allTracks);
     const track = video && itemsInPage(video.textTracks).find(item => item[trackSymbol] === trackId);
+    if (!expectedPlayerRevision || playerRevision !== expectedPlayerRevision) return { status: 'stale', reason: 'PLAYER_STALE_CONTEXT' };
     if (!track) return { status: 'stale', reason: 'PLAYER_STALE_CONTEXT' };
     if (track.kind !== 'subtitles' && track.kind !== 'captions') return { status: 'error', reason: 'PLAYER_TRACK_KIND_UNSUPPORTED' };
     if (track.mode === 'disabled') return { status: 'error', reason: 'PLAYER_TRACK_DISABLED' };
@@ -122,11 +189,13 @@ export const readPlayerInPage = ({ playerId, trackId, pageKey, documentId } = {}
       seenCues.add(key);
       return true;
     }).map(({ startTime, endTime, text }) => ({ startTime, endTime, text }));
-    if (page.pageKey !== pageKey || getDocumentTokenInPage() !== documentId) return { status: 'stale', reason: 'PLAYER_STALE_CONTEXT' };
+    const finalPlayerRevision = await getPlayerRevisionInPage(allVideos, allTracks);
+    if (page.pageKey !== pageKey || getDocumentTokenInPage() !== documentId || finalPlayerRevision !== playerRevision) return { status: 'stale', reason: 'PLAYER_STALE_CONTEXT' };
     return {
       status: 'ready',
       page,
       documentId,
+      playerRevision,
       playerId,
       trackId,
       language: typeof track.language === 'string' ? track.language : '',

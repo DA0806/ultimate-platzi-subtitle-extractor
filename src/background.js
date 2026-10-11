@@ -51,6 +51,7 @@ const matchesPlayerProof = (result, proof) => Boolean(
   isAllowedPlayerPage(result?.page) &&
   result.page.pageKey === proof?.pageKey &&
   result.documentId === proof?.documentId &&
+  result.playerRevision && result.playerRevision === proof?.playerRevision &&
   result.tracks?.some(track => track.trackId === proof?.trackId && track.playerId === proof?.playerId)
 );
 
@@ -104,6 +105,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         trackId: proof.trackId,
         pageKey: proof.pageKey,
         documentId: proof.documentId,
+        playerRevision: proof.playerRevision,
       }).then(response => sendResponse(response));
     });
     return true;

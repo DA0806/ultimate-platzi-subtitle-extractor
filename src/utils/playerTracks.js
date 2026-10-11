@@ -80,6 +80,7 @@ export const probePlayerTracks = ({
   pageUrl = typeof location !== 'undefined' ? location.href : null,
   tabId = null,
   documentId = null,
+  playerRevision = null,
 } = {}) => {
   const page = getPlayerPageIdentity(pageUrl);
   if (!page) {
@@ -102,7 +103,7 @@ export const probePlayerTracks = ({
     const playerId = getId(playerIds, video, 'player', nextPlayerNumber);
     for (const track of getItems(video.textTracks)) {
       // Deliberately read only TextTrack metadata here. Cue text is read by readPlayerTrack after auth.
-      tracks.push({ ...readTrackMetadata(track, playerId), tabId, documentId, page });
+      tracks.push({ ...readTrackMetadata(track, playerId), tabId, documentId, playerRevision, page });
     }
   }
 
@@ -110,6 +111,7 @@ export const probePlayerTracks = ({
     status: tracks.length > 0 ? 'available' : 'no-tracks',
     reason: tracks.length > 0 ? null : 'PLAYER_NO_TRACKS',
     page,
+    playerRevision,
     tracks,
   };
 };
@@ -120,6 +122,7 @@ export const createPlayerAuthorizationProof = ({
   documentId,
   playerId,
   trackId,
+  playerRevision = null,
   authorizationNonce = null,
   rightsConfirmed,
   now = Date.now(),
@@ -146,6 +149,7 @@ export const createPlayerAuthorizationProof = ({
     documentId: String(documentId),
     playerId: String(playerId),
     trackId: String(trackId),
+    playerRevision: playerRevision ? String(playerRevision) : null,
     authorizationNonce: authorizationNonce ? String(authorizationNonce) : null,
     authorizedAt: now,
     expiresAt: now + ttlMs,
@@ -170,6 +174,9 @@ export const assertPlayerAuthorizationProof = (proof, context, now = Date.now())
     String(proof.documentId) !== String(context.documentId) ||
     String(proof.playerId) !== String(context.playerId) ||
     String(proof.trackId) !== String(context.trackId) ||
+    (((context.playerRevision !== null && context.playerRevision !== undefined) ||
+      (proof.playerRevision !== null && proof.playerRevision !== undefined)) &&
+      (!proof.playerRevision || proof.playerRevision !== context.playerRevision)) ||
     (context.authorizationNonce !== undefined && proof.authorizationNonce !== context.authorizationNonce)
   ) {
     throw createError('PLAYER_AUTHORIZATION_SCOPE_MISMATCH', 'La página o el reproductor cambiaron; vuelve a detectar la pista.');
@@ -188,7 +195,8 @@ const sameContext = (expected, actual) => {
     actual.tabId === expected.tabId &&
     String(actual.documentId) === String(expected.documentId) &&
     String(actual.playerId) === String(expected.playerId) &&
-    String(actual.trackId) === String(expected.trackId);
+    String(actual.trackId) === String(expected.trackId) &&
+    (actual.playerRevision === undefined || String(actual.playerRevision) === String(expected.playerRevision));
 };
 
 export const readPlayerTrack = (track, {

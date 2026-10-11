@@ -352,6 +352,54 @@ try {
   );
 
   await fixturePage.evaluate(() => history.replaceState({}, '', '/index.html'));
+  stage = 'refreshing-production-ui-for-query-revision-check';
+  await appPage.reload({ waitUntil: 'domcontentloaded' });
+  await completeSetup(appPage);
+  await detectAndExtract(appPage, fixturePage);
+  stage = 'verifying-query-only-navigation-stale-denial';
+  await assertStaleExportDenied(
+    appPage,
+    fixturePage,
+    () => fixturePage.evaluate(() => window.changeQueryOnly()),
+    'query-only navigation invalidates the old player proof before export',
+  );
+
+  await fixturePage.evaluate(() => history.replaceState({}, '', '/index.html'));
+  stage = 'refreshing-production-ui-for-track-source-check';
+  await appPage.reload({ waitUntil: 'domcontentloaded' });
+  await completeSetup(appPage);
+  await detectAndExtract(appPage, fixturePage);
+  stage = 'verifying-same-player-track-source-stale-denial';
+  await assertStaleExportDenied(
+    appPage,
+    fixturePage,
+    async () => {
+      const mutation = await fixturePage.evaluate(() => window.changeSamePlayerTrackSource());
+      assert.equal(mutation.sameVideo, true);
+      assert.equal(mutation.trackSrcChanged, true);
+      await fixturePage.waitForTimeout(250);
+    },
+    'same-player track src change invalidates the old player proof before export',
+  );
+
+  await fixturePage.evaluate(() => history.replaceState({}, '', '/index.html'));
+  stage = 'refreshing-production-ui-for-media-source-check';
+  await appPage.reload({ waitUntil: 'domcontentloaded' });
+  await completeSetup(appPage);
+  await detectAndExtract(appPage, fixturePage);
+  stage = 'verifying-same-player-media-source-stale-denial';
+  await assertStaleExportDenied(
+    appPage,
+    fixturePage,
+    async () => {
+      const mutation = await fixturePage.evaluate(() => window.changeSamePlayerMediaSource());
+      assert.equal(mutation.sameVideo, true);
+      assert.equal(mutation.mediaSrcChanged, true);
+    },
+    'same-player media src change invalidates the old player proof before export',
+  );
+
+  await fixturePage.evaluate(() => history.replaceState({}, '', '/index.html'));
   stage = 'refreshing-production-ui-for-video-replacement-check';
   await appPage.reload({ waitUntil: 'domcontentloaded' });
   await completeSetup(appPage);

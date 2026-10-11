@@ -20,7 +20,7 @@ const extensionMessage = (message) => {
 };
 
 export const usePlayerExtractor = () => {
-  const [state, setState] = useState({ status: 'idle', tracks: [], page: null, error: null });
+  const [state, setState] = useState({ status: 'idle', tracks: [], page: null, playerRevision: null, error: null });
 
   const detectPlayer = useCallback(async () => {
     setState(current => ({ ...current, status: 'detecting', error: null }));
@@ -28,7 +28,7 @@ export const usePlayerExtractor = () => {
       const response = await extensionMessage({ type: 'PLAYER_PROBE' });
       if (!response?.ok) throw Object.assign(new Error(response?.error?.message || 'No se pudo detectar el reproductor.'), response?.error);
       const result = response.result || {};
-      const nextState = { status: result.status || 'no-tracks', tracks: result.tracks || [], page: result.page || null, documentId: result.documentId || null, authorizationNonce: result.authorizationNonce || null, error: null };
+      const nextState = { status: result.status || 'no-tracks', tracks: result.tracks || [], page: result.page || null, playerRevision: result.playerRevision || null, documentId: result.documentId || null, authorizationNonce: result.authorizationNonce || null, error: null };
       setState(nextState);
       return nextState;
     } catch (error) {
@@ -54,6 +54,7 @@ export const usePlayerExtractor = () => {
       documentId,
       playerId: track.playerId,
       trackId: track.trackId,
+      playerRevision: state.playerRevision,
       authorizationNonce: state.authorizationNonce,
       rightsConfirmed,
     });
@@ -69,6 +70,7 @@ export const usePlayerExtractor = () => {
       documentId: response.result.documentId,
       playerId: response.result.playerId,
       trackId: response.result.trackId,
+      playerRevision: response.result.playerRevision,
     };
     assertPlayerAuthorizationProof(proof, resultContext);
     return {
@@ -79,7 +81,7 @@ export const usePlayerExtractor = () => {
       authorizationProof: proof,
       provenance: 'user_authorized_player',
     };
-  }, [state.authorizationNonce, state.documentId, state.page]);
+  }, [state.authorizationNonce, state.documentId, state.page, state.playerRevision]);
 
   return { ...state, detectPlayer, extractTrack };
 };

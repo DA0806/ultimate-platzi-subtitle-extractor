@@ -40,6 +40,18 @@
         window.setTimeout(exposeReplacementTrackModes, 0);
         replacement.load();
       };
+      window.changeQueryOnly = () => {
+        history.pushState({}, '', `${location.pathname}?player-revision=changed`);
+      };
+      window.changeSamePlayerTrackSource = () => {
+        const track = video.querySelector('track');
+        track.src = '/fixtures/original-en.vtt';
+        return { sameVideo: document.querySelector('#fixture-video') === video, trackSrcChanged: track.src.endsWith('/fixtures/original-en.vtt') };
+      };
+      window.changeSamePlayerMediaSource = () => {
+        video.src = '/fixtures/owned-media-revision.mp4';
+        return { sameVideo: document.querySelector('#fixture-video') === video, mediaSrcChanged: video.src.endsWith('/fixtures/owned-media-revision.mp4') };
+      };
     </script>
   </body>
 </html>

@@ -173,6 +173,7 @@ const revalidateExportPreflight = async (videos = [], context) => {
         documentId: proof.documentId,
         playerId: proof.playerId,
         trackId: proof.trackId,
+        playerRevision: proof.playerRevision,
         authorizationNonce: proof.authorizationNonce,
       });
       const validation = await sendPlayerValidation(proof);
@@ -256,6 +257,7 @@ const assertFinalExportPreflight = async (videos, context) => {
         documentId: proof.documentId,
         playerId: proof.playerId,
         trackId: proof.trackId,
+        playerRevision: proof.playerRevision,
         authorizationNonce: proof.authorizationNonce,
       });
       const validation = await sendPlayerValidation(proof);
@@ -286,6 +288,7 @@ const assertFinalExportSinkPreflight = (videos, context) => {
         documentId: proof.documentId,
         playerId: proof.playerId,
         trackId: proof.trackId,
+        playerRevision: proof.playerRevision,
         authorizationNonce: proof.authorizationNonce,
       });
     } else {
